@@ -1,87 +1,15 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { Circle, BarChart3, Settings } from 'lucide-react';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type YesNo = 'yes' | 'no' | null;
-type KeptFailed = 'kept' | 'failed' | null;
-type GymStatus = 'go' | 'home' | 'none' | null;
-type DoneSkip = 'done' | 'skip' | null;
-type Tab = 'tracker' | 'reports' | 'settings';
-type ReportView = 'daily' | 'weekly' | 'monthly' | 'annual';
-type Tone = 'green' | 'red';
-
-interface LookmaxState {
-  ice: DoneSkip;
-  jaw: DoneSkip;
-  eyes: DoneSkip;
-}
-
-interface PillarRecord {
-  id: string;
-  name: string;
-  ok: boolean;
-}
-
-interface HistoryRecord {
-  ratio: number;
-  dateLabel: string;
-  shortLabel: string;
-  workDone: string | null;
-  sleepReason: string;
-  gymReason: string;
-  workNote: string;
-  workReason?: string;
-  prayNotes: string;
-  prayReason?: string;
-  scrollReason?: string;
-  nofapReason?: string;
-  dietReason?: string;
-  minoxReason?: string;
-  proteinReason?: string;
-  pillars: PillarRecord[];
-}
-
-interface ExtraHabit {
-  id: string;
-  name: string;
-  status: 'done' | 'failed' | null;
-}
-
-interface ToastState {
-  message: string;
-  tone: Tone;
-}
-
-interface SummaryState {
-  pct: number;
-  improve: string[];
-  quote: string;
-  callout: string;
-}
-
-interface AppState {
-  tab: Tab;
-  nofap: KeptFailed; nofapQuicks: string[]; nofapCustom: string; nofapOther: boolean;
-  diet: YesNo; dietQuicks: string[]; dietCustom: string; dietOther: boolean;
-  protein: YesNo; proteinQuicks: string[]; proteinCustom: string; proteinOther: boolean;
-  minox: YesNo; minoxQuicks: string[]; minoxCustom: string; minoxOther: boolean;
-  workDone: YesNo; workNote: string; workQuicks: string[]; workCustom: string; workOther: boolean;
-  sleep: YesNo; sleepQuicks: string[]; sleepCustom: string; sleepOther: boolean;
-  gym: GymStatus; gymQuicks: string[]; gymCustom: string; gymOther: boolean;
-  scroll: YesNo; scrollQuicks: string[]; scrollCustom: string; scrollOther: boolean;
-  lookmax: LookmaxState;
-  pray: YesNo; prayNotes: string; prayQuicks: string[]; prayCustom: string; prayOther: boolean;
-  extraHabits: ExtraHabit[];
-  newHabitName: string;
-  closed: boolean; closedTime: string; summary: SummaryState | null; summaryDismissed: boolean;
-  history: HistoryRecord[];
-  expandedIdx: number | null;
-  reportView: ReportView; selectedPointIdx: number | null;
-  toast: ToastState | null; flash: boolean;
-}
+import { useAppStore } from './store';
+import type {
+  AppState,
+  DoneSkip,
+  HistoryRecord,
+  LookmaxState,
+  PillarRecord,
+  SummaryState,
+  Tone,
+} from './store';
 
 // ---------------------------------------------------------------------------
 // Static content
@@ -140,52 +68,11 @@ const successCallouts = [
   'Bien. Ahora la trampa es pensar que ya te lo ganaste y bajar la guardia mañana.',
 ];
 
-const pillarNames: Record<string, string> = {
-  nofap: 'NO-FAP',
-  diet: 'DIETA',
-  protein: 'PROTEÍNA Y CREATINA',
-  minox: 'MINOXIDIL',
-  work: 'TRABAJO ÓPTIMO',
-  sleep: 'DORMIR',
-  gym: 'GYM',
-  scroll: 'REDES',
-  lookmax: 'LOOKMAX',
-  pray: 'ORAR',
-};
-
 const WORLD_AVG = 0.52;
 
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
-
-function generateSeedHistory(): HistoryRecord[] {
-  let seed = 7;
-  const rand = () => {
-    seed = (seed * 9301 + 49297) % 233280;
-    return seed / 233280;
-  };
-  const out: HistoryRecord[] = [];
-  const days = 60;
-  const pillarIds = ['nofap', 'diet', 'protein', 'minox', 'work', 'sleep', 'gym', 'scroll', 'lookmax', 'pray'];
-  for (let i = days; i >= 1; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const trend = 0.34 + (0.42 * (days - i)) / (days - 1);
-    const noise = (rand() - 0.5) * 0.42;
-    const ratio = Math.max(0.1, Math.min(1, trend + noise));
-    const pillars: PillarRecord[] = pillarIds.map((id) => ({ id, name: pillarNames[id], ok: rand() < ratio }));
-    out.push({
-      ratio,
-      dateLabel: d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-      shortLabel: d.toLocaleDateString('es-ES', { weekday: 'short' }).slice(0, 1).toUpperCase(),
-      workDone: ratio > 0.6 ? 'yes' : 'no',
-      sleepReason: '', gymReason: '', workNote: '', prayNotes: '',
-      pillars,
-    });
-  }
-  return out;
-}
 
 function smoothPath(pts: { x: number; y: number }[]): string {
   if (pts.length < 2) return '';
@@ -302,42 +189,14 @@ function ReasonPicker({
 }
 
 // ---------------------------------------------------------------------------
-// Initial state
-// ---------------------------------------------------------------------------
-
-function buildInitialState(): AppState {
-  return {
-    tab: 'tracker',
-    nofap: null, nofapQuicks: [], nofapCustom: '', nofapOther: false,
-    diet: null, dietQuicks: [], dietCustom: '', dietOther: false,
-    protein: null, proteinQuicks: [], proteinCustom: '', proteinOther: false,
-    minox: null, minoxQuicks: [], minoxCustom: '', minoxOther: false,
-    workDone: null, workNote: '', workQuicks: [], workCustom: '', workOther: false,
-    sleep: null, sleepQuicks: [], sleepCustom: '', sleepOther: false,
-    gym: null, gymQuicks: [], gymCustom: '', gymOther: false,
-    scroll: null, scrollQuicks: [], scrollCustom: '', scrollOther: false,
-    lookmax: { ice: null, jaw: null, eyes: null },
-    pray: null, prayNotes: '', prayQuicks: [], prayCustom: '', prayOther: false,
-    extraHabits: [],
-    newHabitName: '',
-    closed: false, closedTime: '', summary: null, summaryDismissed: false,
-    history: generateSeedHistory(),
-    expandedIdx: null,
-    reportView: 'daily', selectedPointIdx: null,
-    toast: null, flash: false,
-  };
-}
-
-// ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
 
 export default function App() {
-  const [state, setState] = useState<AppState>(buildInitialState);
+  const state = useAppStore();
+  const patch = state.patch;
   const toastTimeout = useRef<number | null>(null);
   const flashTimeout = useRef<number | null>(null);
-
-  const patch = (p: Partial<AppState>) => setState((prev) => ({ ...prev, ...p }));
 
   const showToast = (message: string, tone: Tone) => {
     if (toastTimeout.current) window.clearTimeout(toastTimeout.current);
