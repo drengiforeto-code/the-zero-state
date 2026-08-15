@@ -77,7 +77,7 @@ export interface AppState {
   extraHabits: ExtraHabit[];
   newHabitName: string;
   closed: boolean; closedTime: string; summary: SummaryState | null; summaryDismissed: boolean;
-  history: HistoryRecord[];
+  dbHistory: HistoryRecord[]; dbLoading: boolean; dbError: string | null;
   expandedIdx: number | null;
   reportView: ReportView; selectedPointIdx: number | null;
   toast: ToastState | null; flash: boolean;
@@ -108,7 +108,7 @@ function buildInitialState(): AppState {
     extraHabits: [],
     newHabitName: '',
     closed: false, closedTime: '', summary: null, summaryDismissed: false,
-    history: [],
+    dbHistory: [], dbLoading: false, dbError: null,
     expandedIdx: null,
     reportView: 'daily', selectedPointIdx: null,
     toast: null, flash: false,
@@ -118,7 +118,12 @@ function buildInitialState(): AppState {
 // Fields intentionally excluded from persistence: they're ephemeral UI state
 // (toast/flash animations, current tab/chart view, in-progress drafts) that
 // should never survive a reload — only real tracked records should.
-const TRANSIENT_KEYS = ['toast', 'flash', 'tab', 'reportView', 'selectedPointIdx', 'expandedIdx', 'newHabitName', 'patch'] as const;
+// dbHistory/dbLoading/dbError mirror Supabase and are refetched on load, so
+// they're excluded too rather than cached stale in localStorage.
+const TRANSIENT_KEYS = [
+  'toast', 'flash', 'tab', 'reportView', 'selectedPointIdx', 'expandedIdx', 'newHabitName', 'patch',
+  'dbHistory', 'dbLoading', 'dbError',
+] as const;
 
 export const useAppStore = create<AppStore>()(
   persist(
@@ -127,7 +132,7 @@ export const useAppStore = create<AppStore>()(
       patch: (p) => set(p),
     }),
     {
-      name: 'sovereign-os-storage-v2',
+      name: 'sovereign-os-storage-v3',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => {
         const persisted = { ...state } as Partial<AppStore>;

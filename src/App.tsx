@@ -1,14 +1,17 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Circle, BarChart3, Settings } from 'lucide-react';
 import { useAppStore } from './store';
+import { supabase } from './lib/supabase';
 import type {
   AppState,
   DoneSkip,
+  ExtraHabit,
   HistoryRecord,
   LookmaxState,
   PillarRecord,
   SummaryState,
   Tone,
+  YesNo,
 } from './store';
 
 // ---------------------------------------------------------------------------
@@ -94,6 +97,55 @@ function smoothPath(pts: { x: number; y: number }[]): string {
 
 function tierColor(v: number): string {
   return v >= 0.7 ? '#f7931a' : v < 0.5 ? '#ff3333' : '#8a8a8a';
+}
+
+// ---------------------------------------------------------------------------
+// Supabase row <-> HistoryRecord mapping
+// ---------------------------------------------------------------------------
+
+interface DiaCerradoDetalle {
+  habitos_logrados: string[];
+  vectores_ataque: { pilar: string; razon: string }[];
+  pillars: PillarRecord[];
+  workDone: YesNo;
+  workNote: string;
+  prayNotes: string;
+  extraHabits: ExtraHabit[];
+}
+
+interface DiaCerradoRow {
+  id: string;
+  fecha: string;
+  score_coherencia: number;
+  detalle: DiaCerradoDetalle;
+  created_at: string;
+}
+
+function reasonFor(detalle: DiaCerradoDetalle, pilar: string): string {
+  return detalle.vectores_ataque?.find((v) => v.pilar === pilar)?.razon ?? '';
+}
+
+function dbRowToHistoryRecord(row: DiaCerradoRow): HistoryRecord {
+  const d = new Date(row.fecha + 'T00:00:00');
+  const detalle = row.detalle;
+  return {
+    ratio: row.score_coherencia / 100,
+    dateLabel: d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+    shortLabel: d.toLocaleDateString('es-ES', { weekday: 'short' }).slice(0, 1).toUpperCase(),
+    workDone: detalle.workDone ?? null,
+    sleepReason: reasonFor(detalle, 'DORMIR'),
+    gymReason: reasonFor(detalle, 'GYM'),
+    workNote: detalle.workNote || '',
+    workReason: reasonFor(detalle, 'TRABAJO ÓPTIMO'),
+    prayNotes: detalle.prayNotes || '',
+    prayReason: reasonFor(detalle, 'ORAR'),
+    scrollReason: reasonFor(detalle, 'REDES'),
+    nofapReason: reasonFor(detalle, 'NO-FAP'),
+    dietReason: reasonFor(detalle, 'DIETA'),
+    minoxReason: reasonFor(detalle, 'MINOXIDIL'),
+    proteinReason: reasonFor(detalle, 'PROTEÍNA Y CREATINA'),
+    pillars: detalle.pillars,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -198,6 +250,24 @@ export default function App() {
   const toastTimeout = useRef<number | null>(null);
   const flashTimeout = useRef<number | null>(null);
 
+  const fetchHistory = async () => {
+    patch({ dbLoading: true, dbError: null });
+    const { data, error } = await supabase
+      .from('dias_cerrados')
+      .select('*')
+      .order('fecha', { ascending: true });
+    if (error) {
+      patch({ dbLoading: false, dbError: error.message });
+      return;
+    }
+    patch({ dbHistory: (data ?? []).map((row) => dbRowToHistoryRecord(row as DiaCerradoRow)), dbLoading: false });
+  };
+
+  useEffect(() => {
+    fetchHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const showToast = (message: string, tone: Tone) => {
     if (toastTimeout.current) window.clearTimeout(toastTimeout.current);
     patch({ toast: { message, tone } });
@@ -285,7 +355,7 @@ export default function App() {
   const todayRatio = pillarMeta.reduce((a, p) => a + (p.ok ? 1 : 0), 0) / pillarMeta.length;
   const failedPillars = pillarMeta.filter((p) => !p.ok);
 
-  const last6 = s.history.slice(-6);
+  const last6 = s.dbHistory.slice(-6);
   const fullHistory = [...last6.map((r) => r.ratio), ...(s.closed ? [] : [todayRatio])];
   const sovereigntyDays = fullHistory.filter((v) => v >= 0.7).length;
   const slaveryDays = fullHistory.filter((v) => v < 0.5).length;
@@ -295,19 +365,19 @@ export default function App() {
     else break;
   }
 
-  const allTimeline = [...s.history.map((r) => r.ratio), ...(s.closed ? [] : [todayRatio])];
+  const allTimeline = [...s.dbHistory.map((r) => r.ratio), ...(s.closed ? [] : [todayRatio])];
   let bestStreak = 0, run = 0;
   for (let i = 0; i < allTimeline.length; i++) {
     if (allTimeline[i] >= 0.7) { run++; bestStreak = Math.max(bestStreak, run); } else run = 0;
   }
 
   const failTally: Record<string, number> = {};
-  s.history.forEach((r) => r.pillars.forEach((p) => { if (!p.ok) failTally[p.name] = (failTally[p.name] || 0) + 1; }));
+  s.dbHistory.forEach((r) => r.pillars.forEach((p) => { if (!p.ok) failTally[p.name] = (failTally[p.name] || 0) + 1; }));
   let weakestPillar = '—', weakestCount = 0;
   Object.keys(failTally).forEach((name) => { if (failTally[name] > weakestCount) { weakestCount = failTally[name]; weakestPillar = name; } });
 
   const pillarTotals: Record<string, { ok: number; total: number }> = {};
-  s.history.forEach((r) => r.pillars.forEach((p) => {
+  s.dbHistory.forEach((r) => r.pillars.forEach((p) => {
     if (!pillarTotals[p.name]) pillarTotals[p.name] = { ok: 0, total: 0 };
     pillarTotals[p.name].total++;
     if (p.ok) pillarTotals[p.name].ok++;
@@ -318,7 +388,7 @@ export default function App() {
     return { name, pct, color: pct >= 70 ? '#f7931a' : pct < 50 ? '#ff3333' : '#8a8a8a' };
   }).sort((a, b) => b.pct - a.pct);
 
-  const dayList = [...s.history].slice(-14).reverse().map((r, idx) => {
+  const dayList = [...s.dbHistory].slice(-14).reverse().map((r, idx) => {
     const failed = r.pillars.filter((p) => !p.ok).map((p) => p.name);
     const notes = [
       r.sleepReason ? { tag: 'DORMIR', text: r.sleepReason } : null,
@@ -350,14 +420,14 @@ export default function App() {
 
   let rawSeries: { label: string; ratio: number }[] = [];
   if (s.reportView === 'daily') {
-    const win = s.history.slice(-20);
+    const win = s.dbHistory.slice(-20);
     rawSeries = win.map((r) => ({ label: r.dateLabel, ratio: r.ratio }));
     if (includeToday) rawSeries.push({ label: 'HOY', ratio: todayRatio });
   } else {
     const groupBy = s.reportView;
-    const withDate = s.history.map((r, i) => {
+    const withDate = s.dbHistory.map((r, i) => {
       const d = new Date();
-      d.setDate(d.getDate() - (s.history.length - i));
+      d.setDate(d.getDate() - (s.dbHistory.length - i));
       return { ratio: r.ratio, dateObj: d };
     });
     if (includeToday) withDate.push({ ratio: todayRatio, dateObj: new Date() });
@@ -406,7 +476,7 @@ export default function App() {
   const trendEndLabel = rawSeries.length ? rawSeries[rawSeries.length - 1].label : '';
   const selectedPoint = s.selectedPointIdx !== null ? chartPoints[s.selectedPointIdx] : null;
 
-  const allRatios = [...s.history.map((r) => r.ratio), ...(s.closed ? [] : [todayRatio])];
+  const allRatios = [...s.dbHistory.map((r) => r.ratio), ...(s.closed ? [] : [todayRatio])];
   const yourAvg = allRatios.length ? allRatios.reduce((a, b) => a + b, 0) / allRatios.length : 0;
   let rank = 'RECLUTA', rankColor = '#ff8080';
   if (yourAvg >= 0.8) { rank = 'ÉLITE'; rankColor = '#f7931a'; }
@@ -425,28 +495,33 @@ export default function App() {
 
   const summaryVisible = s.closed && !!s.summary && !s.summaryDismissed;
 
-  const onCloseDay = () => {
+  const onCloseDay = async () => {
     if (s.closed) { startNewDay(); return; }
     if (!canClose) return;
     const now = new Date();
-    const record: HistoryRecord = {
-      ratio: todayRatio,
-      dateLabel: now.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-      shortLabel: now.toLocaleDateString('es-ES', { weekday: 'short' }).slice(0, 1).toUpperCase(),
-      workDone: s.workDone,
-      sleepReason: s.sleep === 'no' ? finalizeReason(s.sleepQuicks, s.sleepOther, s.sleepCustom) : '',
-      gymReason: s.gym === 'none' ? finalizeReason(s.gymQuicks, s.gymOther, s.gymCustom) : '',
-      workNote: s.workNote.trim(),
-      workReason: s.workDone === 'no' ? finalizeReason(s.workQuicks, s.workOther, s.workCustom) : '',
-      prayNotes: s.prayNotes.trim(),
-      prayReason: s.pray === 'no' ? finalizeReason(s.prayQuicks, s.prayOther, s.prayCustom) : '',
-      scrollReason: s.scroll === 'yes' ? finalizeReason(s.scrollQuicks, s.scrollOther, s.scrollCustom) : '',
-      nofapReason: s.nofap === 'failed' ? finalizeReason(s.nofapQuicks, s.nofapOther, s.nofapCustom) : '',
-      dietReason: s.diet === 'no' ? finalizeReason(s.dietQuicks, s.dietOther, s.dietCustom) : '',
-      minoxReason: s.minox === 'no' ? finalizeReason(s.minoxQuicks, s.minoxOther, s.minoxCustom) : '',
-      proteinReason: s.protein === 'no' ? finalizeReason(s.proteinQuicks, s.proteinOther, s.proteinCustom) : '',
-      pillars: pillarMeta,
+
+    const reasonById: Record<string, string> = {
+      sleep: s.sleep === 'no' ? finalizeReason(s.sleepQuicks, s.sleepOther, s.sleepCustom) : '',
+      gym: s.gym === 'none' ? finalizeReason(s.gymQuicks, s.gymOther, s.gymCustom) : '',
+      work: s.workDone === 'no' ? finalizeReason(s.workQuicks, s.workOther, s.workCustom) : '',
+      pray: s.pray === 'no' ? finalizeReason(s.prayQuicks, s.prayOther, s.prayCustom) : '',
+      scroll: s.scroll === 'yes' ? finalizeReason(s.scrollQuicks, s.scrollOther, s.scrollCustom) : '',
+      nofap: s.nofap === 'failed' ? finalizeReason(s.nofapQuicks, s.nofapOther, s.nofapCustom) : '',
+      diet: s.diet === 'no' ? finalizeReason(s.dietQuicks, s.dietOther, s.dietCustom) : '',
+      minox: s.minox === 'no' ? finalizeReason(s.minoxQuicks, s.minoxOther, s.minoxCustom) : '',
+      protein: s.protein === 'no' ? finalizeReason(s.proteinQuicks, s.proteinOther, s.proteinCustom) : '',
     };
+
+    const detalle = {
+      habitos_logrados: pillarMeta.filter((p) => p.ok).map((p) => p.name),
+      vectores_ataque: failedPillars.map((p) => ({ pilar: p.name, razon: reasonById[p.id] || '' })),
+      pillars: pillarMeta,
+      workDone: s.workDone,
+      workNote: s.workNote.trim(),
+      prayNotes: s.prayNotes.trim(),
+      extraHabits: s.extraHabits,
+    };
+
     const quoteId = failedPillars.length ? failedPillars[0].id : 'perfect';
     const summary: SummaryState = {
       pct: Math.round(todayRatio * 100),
@@ -456,14 +531,28 @@ export default function App() {
         ? calloutPool[Math.floor(Math.random() * calloutPool.length)]
         : successCallouts[Math.floor(Math.random() * successCallouts.length)],
     };
+
+    // Persist to Supabase before touching local state — if this fails, the
+    // board must NOT be marked closed/cleared, so nothing is lost.
+    const { error } = await supabase.from('dias_cerrados').insert({
+      fecha: now.toISOString().slice(0, 10),
+      score_coherencia: Math.round(todayRatio * 100),
+      detalle,
+    });
+
+    if (error) {
+      showToast('No se pudo guardar en Supabase: ' + error.message, 'red');
+      return;
+    }
+
     patch({
       closed: true,
       closedTime: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-      history: [...s.history, record],
       summary,
       summaryDismissed: false,
     });
-    showToast('Día cerrado. La auditoría de hoy queda registrada.', 'green');
+    showToast('Día cerrado. La auditoría de hoy queda registrada en tu historial real.', 'green');
+    fetchHistory();
   };
 
   // -------------------------------------------------------------------------
@@ -940,6 +1029,18 @@ export default function App() {
         {s.tab === 'reports' && (
           <>
             <div className="text-[11px] text-[#8a8a8a] tracking-[1.5px] uppercase mb-4">ANALÍTICAS // TIEMPO Y SOBERANÍA</div>
+
+            {s.dbLoading && (
+              <div className="text-[11px] text-[#8a8a8a] tracking-wide mb-3.5">CARGANDO HISTORIAL DESDE SUPABASE…</div>
+            )}
+            {s.dbError && (
+              <div className="bg-[#160707] border border-[#ff3333] text-[#ff8080] text-[11px] leading-[1.5] rounded-sm p-[14px_16px] mb-3.5 flex justify-between items-center gap-3">
+                <span>NO SE PUDO CARGAR EL HISTORIAL: {s.dbError}</span>
+                <button className="text-[#ff8080] border border-[#ff3333] rounded-sm px-2.5 py-1.5 text-[10px] font-bold tracking-wide cursor-pointer bg-transparent shrink-0" onClick={() => fetchHistory()}>
+                  REINTENTAR
+                </button>
+              </div>
+            )}
 
             <div className="bg-[#111111] border border-[#232323] rounded-sm p-[18px] mb-3.5 flex justify-between items-center">
               <div>
