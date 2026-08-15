@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Circle, BarChart3, Settings } from 'lucide-react';
 import { useAppStore } from './store';
-import { supabase } from './lib/supabase';
+import { supabase, supabaseConfigError } from './lib/supabase';
 import type {
   AppState,
   DoneSkip,
@@ -251,6 +251,10 @@ export default function App() {
   const flashTimeout = useRef<number | null>(null);
 
   const fetchHistory = async () => {
+    if (!supabase) {
+      patch({ dbLoading: false, dbError: supabaseConfigError });
+      return;
+    }
     patch({ dbLoading: true, dbError: null });
     const { data, error } = await supabase
       .from('dias_cerrados')
@@ -531,6 +535,11 @@ export default function App() {
         ? calloutPool[Math.floor(Math.random() * calloutPool.length)]
         : successCallouts[Math.floor(Math.random() * successCallouts.length)],
     };
+
+    if (!supabase) {
+      showToast('Supabase no está configurado: ' + supabaseConfigError, 'red');
+      return;
+    }
 
     // Persist to Supabase before touching local state — if this fails, the
     // board must NOT be marked closed/cleared, so nothing is lost.
