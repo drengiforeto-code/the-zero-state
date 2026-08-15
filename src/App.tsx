@@ -543,11 +543,14 @@ export default function App() {
 
     // Persist to Supabase before touching local state — if this fails, the
     // board must NOT be marked closed/cleared, so nothing is lost.
-    const { error } = await supabase.from('dias_cerrados').insert({
+    // Upsert on `fecha`: closing "today" twice (re-closing after starting a
+    // new day within the same calendar date, or retrying) amends today's
+    // row instead of hitting the unique constraint.
+    const { error } = await supabase.from('dias_cerrados').upsert({
       fecha: now.toISOString().slice(0, 10),
       score_coherencia: Math.round(todayRatio * 100),
       detalle,
-    });
+    }, { onConflict: 'fecha' });
 
     if (error) {
       showToast('No se pudo guardar en Supabase: ' + error.message, 'red');
