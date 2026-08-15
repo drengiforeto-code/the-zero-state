@@ -99,6 +99,14 @@ function tierColor(v: number): string {
   return v >= 0.7 ? '#f7931a' : v < 0.5 ? '#ff3333' : '#8a8a8a';
 }
 
+// Local calendar date as 'YYYY-MM-DD'. NOT toISOString().slice(0,10) — that
+// converts to UTC first, so the day rolls over at UTC midnight rather than
+// the user's actual local midnight (hours off in most timezones).
+function localDateStr(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 // ---------------------------------------------------------------------------
 // Supabase row <-> HistoryRecord mapping
 // ---------------------------------------------------------------------------
@@ -547,7 +555,7 @@ export default function App() {
     // new day within the same calendar date, or retrying) amends today's
     // row instead of hitting the unique constraint.
     const { error } = await supabase.from('dias_cerrados').upsert({
-      fecha: now.toISOString().slice(0, 10),
+      fecha: localDateStr(now),
       score_coherencia: Math.round(todayRatio * 100),
       detalle,
     }, { onConflict: 'fecha' });
