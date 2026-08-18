@@ -64,6 +64,7 @@ export interface SummaryState {
 
 export interface AppState {
   tab: Tab;
+  dayStarted: boolean; dayStartTime: string;
   nofap: KeptFailed; nofapQuicks: string[]; nofapCustom: string; nofapOther: boolean;
   diet: YesNo; dietQuicks: string[]; dietCustom: string; dietOther: boolean;
   protein: YesNo; proteinQuicks: string[]; proteinCustom: string; proteinOther: boolean;
@@ -95,6 +96,7 @@ interface AppStore extends AppState {
 function buildInitialState(): AppState {
   return {
     tab: 'tracker',
+    dayStarted: false, dayStartTime: '',
     nofap: null, nofapQuicks: [], nofapCustom: '', nofapOther: false,
     diet: null, dietQuicks: [], dietCustom: '', dietOther: false,
     protein: null, proteinQuicks: [], proteinCustom: '', proteinOther: false,

@@ -119,6 +119,7 @@ interface DiaCerradoDetalle {
   workNote: string;
   prayNotes: string;
   extraHabits: ExtraHabit[];
+  horaInicio?: string;
 }
 
 interface DiaCerradoRow {
@@ -315,8 +316,18 @@ export default function App() {
     patch({ extraHabits: [...state.extraHabits, { id, name: name.toUpperCase(), status: null }], newHabitName: '' });
   };
 
+  const startDay = () => {
+    const now = new Date();
+    patch({
+      dayStarted: true,
+      dayStartTime: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+    });
+    showToast('Día iniciado. A partir de ahora, cada movimiento cuenta.', 'green');
+  };
+
   const startNewDay = () => {
     patch({
+      dayStarted: false, dayStartTime: '',
       nofap: null, nofapQuicks: [], nofapCustom: '', nofapOther: false,
       diet: null, dietQuicks: [], dietCustom: '', dietOther: false,
       protein: null, proteinQuicks: [], proteinCustom: '', proteinOther: false,
@@ -429,6 +440,9 @@ export default function App() {
   const hasTodayActivity = !!(s.nofap || s.diet || s.minox || s.workDone || s.sleep || s.gym || s.scroll || s.pray ||
     s.lookmax.ice || s.lookmax.jaw || s.lookmax.eyes);
   const includeToday = !s.closed && hasTodayActivity;
+  // Falls back to hasTodayActivity so a day already in progress before this
+  // field existed (or a stale persisted state) never gets locked out.
+  const dayUnlocked = s.dayStarted || hasTodayActivity;
 
   let rawSeries: { label: string; ratio: number }[] = [];
   if (s.reportView === 'daily') {
@@ -532,6 +546,7 @@ export default function App() {
       workNote: s.workNote.trim(),
       prayNotes: s.prayNotes.trim(),
       extraHabits: s.extraHabits,
+      horaInicio: s.dayStartTime || undefined,
     };
 
     const quoteId = failedPillars.length ? failedPillars[0].id : 'perfect';
@@ -615,8 +630,27 @@ export default function App() {
         {/* -------------------------------------------------------------- */}
         {s.tab === 'tracker' && (
           <>
-            <div className="text-[11px] text-[#8a8a8a] tracking-[1.5px] uppercase mb-4">AUDITORÍA // {todayLabel}</div>
+            <div className="text-[11px] text-[#8a8a8a] tracking-[1.5px] uppercase mb-4">
+              AUDITORÍA // {todayLabel}
+              {dayUnlocked && s.dayStartTime && (
+                <span className="text-[#6b6b6b] normal-case tracking-normal"> — iniciado a las {s.dayStartTime}</span>
+              )}
+            </div>
 
+            {!dayUnlocked ? (
+              <div className={cardClass}>
+                <div className={cardHeadClass}>ANTES DE EMPEZAR</div>
+                <div className={whyClass}>Marca el inicio de tu día. Desde ahí se habilita el resto — vas registrando cada apartado a medida que ocurre, no todo junto al final.</div>
+                <button
+                  onClick={startDay}
+                  className="w-full p-[18px] text-[15px] font-bold tracking-[2px] rounded-sm border-none cursor-pointer transition-all"
+                  style={{ background: '#f7931a', color: '#0a0a0a', boxShadow: '0 0 24px rgba(247,147,26,0.55)' }}
+                >
+                  INICIAR EL DÍA
+                </button>
+              </div>
+            ) : (
+            <>
             <div className="flex flex-col gap-3.5">
               {/* 01 DORMIR */}
               <div className={cardClass}>
@@ -1002,6 +1036,8 @@ export default function App() {
                 <div className="text-[11px] text-[#ff4d4d] mt-2.5">⚠ {blockReasonText}</div>
               )}
             </div>
+            </>
+            )}
           </>
         )}
 
