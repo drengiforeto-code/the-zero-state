@@ -1,45 +1,18 @@
-import { useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import { Circle, BarChart3, Settings } from 'lucide-react';
 import { useAppStore } from './store';
 import { supabase, supabaseConfigError } from './lib/supabase';
-import type {
-  AppState,
-  DoneSkip,
-  ExtraHabit,
-  HistoryRecord,
-  LookmaxState,
-  PillarRecord,
-  SummaryState,
-  Tone,
-  YesNo,
-} from './store';
+import { fetchHabits, upsertHabits } from './lib/habitsRepo';
+import { BLOQUES, isAnswered, isBlocking, isOk, reasonText } from './habits';
+import type { Bloque, HabitDef, HabitEntry } from './habits';
+import type { HistoryRecord, PillarRecord, SummaryState, Tone } from './store';
+import HabitCard from './components/HabitCard';
+import SettingsTab from './components/SettingsTab';
+import { cardClass, cardHeadClass, sectionLabelClass, tabBtnClass, viewBtnClass, whyClass } from './ui';
 
 // ---------------------------------------------------------------------------
 // Static content
 // ---------------------------------------------------------------------------
-
-const sleepReasons = ['Estrés', 'Pantallas antes de dormir', 'Ruido o incomodidad', 'Cafeína o alcohol', 'Pensamientos acelerados'];
-const gymReasons = ['Falta de tiempo', 'Cansancio', 'Pereza', 'Lesión o dolor', 'Prioricé otra cosa'];
-const scrollReasons = ['Aburrimiento', 'Ansiedad', 'Notificación', 'Costumbre', 'Procrastinación'];
-const nofapReasons = ['Aburrimiento', 'Estrés', 'Curiosidad', 'Costumbre', 'Ansiedad'];
-const dietReasons = ['Antojo', 'Poca planificación', 'Evento social', 'Estrés', 'Pereza'];
-const minoxReasons = ['Se me olvidó', 'Falta de tiempo', 'Pereza', 'No tenía a la mano'];
-const workReasons = ['Distracciones', 'Reuniones excesivas', 'Procrastinación', 'Mala planificación', 'Cansancio'];
-const proteinReasons = ['Se me olvidó', 'No tenía en casa', 'Pereza', 'Prioricé otra cosa'];
-const prayReasons = ['Falta de tiempo', 'Se me olvidó', 'Distracción', 'Pereza'];
-
-const whyNotes: Record<string, string> = {
-  nofap: 'Preserva tu energía y tu foco mental.',
-  diet: 'Tu cuerpo es la base de cualquier disciplina.',
-  minox: 'Los resultados compuestos premian la constancia.',
-  work: 'El tiempo respetado es libertad ganada.',
-  sleep: 'Sin descanso real ninguna disciplina se sostiene.',
-  gym: 'El cuerpo fuerte sostiene la mente fuerte.',
-  scroll: 'Cada scroll sin propósito es atención robada.',
-  lookmax: 'Los detalles son la diferencia entre bueno y memorable.',
-  pray: 'La paz interior sostiene todas las demás métricas.',
-  protein: 'La recuperación real ocurre con los nutrientes, no con la intención.',
-};
 
 const stoicQuotes: Record<string, string> = {
   nofap: 'La cagaste. Le regalaste tu disciplina a cinco minutos de nada. Mañana no hay excusa.',
@@ -54,6 +27,7 @@ const stoicQuotes: Record<string, string> = {
   protein: 'No le diste a tu cuerpo lo que necesitaba para recuperarse. Estás dejando resultados en la mesa.',
   perfect: 'Día perfecto. Ahora la presión es no bajar el nivel mañana.',
 };
+const genericQuote = 'Dijiste que lo harías y no lo hiciste. La palabra que te das a ti mismo es la primera que tienes que cumplir.';
 
 const calloutPool = [
   'Sé honesto: hoy no dio tu mejor versión. Que la incomodidad de leer esto sea la razón para no repetirlo mañana.',
@@ -107,6 +81,8 @@ function localDateStr(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+const blockRank = (b: Bloque) => BLOQUES.findIndex((x) => x.id === b);
+
 // ---------------------------------------------------------------------------
 // Supabase row <-> HistoryRecord mapping
 // ---------------------------------------------------------------------------
@@ -115,11 +91,12 @@ interface DiaCerradoDetalle {
   habitos_logrados: string[];
   vectores_ataque: { pilar: string; razon: string }[];
   pillars: PillarRecord[];
-  workDone: YesNo;
-  workNote: string;
-  prayNotes: string;
-  extraHabits: ExtraHabit[];
+  notas?: { pilar: string; nota: string }[];
+  respuestas?: Record<string, HabitEntry>;
   horaInicio?: string;
+  // Legacy fields from before habits were configurable.
+  workNote?: string;
+  prayNotes?: string;
 }
 
 interface DiaCerradoRow {
@@ -130,123 +107,23 @@ interface DiaCerradoRow {
   created_at: string;
 }
 
-function reasonFor(detalle: DiaCerradoDetalle, pilar: string): string {
-  return detalle.vectores_ataque?.find((v) => v.pilar === pilar)?.razon ?? '';
-}
-
 function dbRowToHistoryRecord(row: DiaCerradoRow): HistoryRecord {
   const d = new Date(row.fecha + 'T00:00:00');
   const detalle = row.detalle;
+  const notes = [
+    ...(detalle.vectores_ataque ?? []).filter((v) => v.razon).map((v) => ({ tag: v.pilar, text: v.razon })),
+    ...(detalle.notas ?? []).map((n) => ({ tag: n.pilar, text: n.nota })),
+    ...(detalle.workNote ? [{ tag: 'TRABAJO ÓPTIMO', text: detalle.workNote }] : []),
+    ...(detalle.prayNotes ? [{ tag: 'ORAR', text: detalle.prayNotes }] : []),
+  ];
   return {
+    fecha: row.fecha,
     ratio: row.score_coherencia / 100,
     dateLabel: d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
     shortLabel: d.toLocaleDateString('es-ES', { weekday: 'short' }).slice(0, 1).toUpperCase(),
-    workDone: detalle.workDone ?? null,
-    sleepReason: reasonFor(detalle, 'DORMIR'),
-    gymReason: reasonFor(detalle, 'GYM'),
-    workNote: detalle.workNote || '',
-    workReason: reasonFor(detalle, 'TRABAJO ÓPTIMO'),
-    prayNotes: detalle.prayNotes || '',
-    prayReason: reasonFor(detalle, 'ORAR'),
-    scrollReason: reasonFor(detalle, 'REDES'),
-    nofapReason: reasonFor(detalle, 'NO-FAP'),
-    dietReason: reasonFor(detalle, 'DIETA'),
-    minoxReason: reasonFor(detalle, 'MINOXIDIL'),
-    proteinReason: reasonFor(detalle, 'PROTEÍNA Y CREATINA'),
-    pillars: detalle.pillars,
+    pillars: detalle.pillars ?? [],
+    notes,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Tailwind class helpers
-// ---------------------------------------------------------------------------
-
-function btnClass(active: boolean, tone: Tone): string {
-  const active2 = tone === 'red'
-    ? 'bg-[rgba(255,51,51,0.12)] text-[#ff3333] border-[#ff3333]'
-    : 'bg-[rgba(247,147,26,0.12)] text-[#f7931a] border-[#f7931a]';
-  const inactive = 'bg-transparent text-[#8a8a8a] border-[#2a2a2a]';
-  return `flex-1 text-xs font-semibold tracking-wide px-3.5 py-2.5 rounded-sm border cursor-pointer transition-colors ${active ? active2 : inactive}`;
-}
-
-function chipClass(active: boolean): string {
-  return `text-[11px] font-semibold tracking-wide px-3 py-2 rounded-sm border cursor-pointer transition-colors ${
-    active ? 'bg-[rgba(255,51,51,0.15)] text-[#ff6b6b] border-[#ff3333]' : 'bg-[#0d0d0d] text-[#a0a0a0] border-[#2a2a2a]'
-  }`;
-}
-
-function viewBtnClass(active: boolean): string {
-  return `flex-1 text-[10px] font-semibold tracking-wide px-2.5 py-[7px] rounded-sm border cursor-pointer transition-colors ${
-    active ? 'bg-[rgba(247,147,26,0.14)] text-[#f7931a] border-[#f7931a]' : 'bg-transparent text-[#8a8a8a] border-[#2a2a2a]'
-  }`;
-}
-
-function tabBtnClass(active: boolean): string {
-  return `flex-1 flex items-center justify-center gap-1.5 text-[10px] font-semibold tracking-wider px-2 py-[9px] rounded-sm border-none cursor-pointer transition-colors ${
-    active ? 'bg-[#141414] text-[#f7931a]' : 'bg-transparent text-[#8a8a8a]'
-  }`;
-}
-
-const cardClass = 'bg-[#111111] border border-[#232323] rounded-sm p-[18px]';
-const cardHeadClass = 'text-[11px] text-[#a0a0a0] tracking-wide mb-1.5 font-semibold';
-const whyClass = 'text-[11px] text-[#6b6b6b] mb-3.5 leading-snug';
-const inputClass = 'w-full box-border bg-[#0d0d0d] border border-[#2a2a2a] rounded-sm text-[#e5e5e5] text-[13px] px-3 py-2.5 outline-none focus:border-[#f7931a]';
-const textareaClass = 'w-full box-border min-h-[60px] bg-[#0d0d0d] border border-[#5a2a2a] rounded-sm text-[#e5e5e5] text-[13px] px-3 py-2.5 outline-none resize-y focus:border-[#f7931a]';
-
-// ---------------------------------------------------------------------------
-// Reusable "reason" picker block (chips + optional free-text)
-// ---------------------------------------------------------------------------
-
-function ReasonPicker({
-  visible,
-  prompt,
-  options,
-  quicks,
-  other,
-  custom,
-  onToggle,
-  onToggleOther,
-  onCustomChange,
-  marginBottom = 14,
-  placeholder = 'Redacta qué pasó',
-}: {
-  visible: boolean;
-  prompt: string;
-  options: string[];
-  quicks: string[];
-  other: boolean;
-  custom: string;
-  onToggle: (label: string) => void;
-  onToggleOther: () => void;
-  onCustomChange: (value: string) => void;
-  marginBottom?: number;
-  placeholder?: string;
-}) {
-  if (!visible) return null;
-  return (
-    <>
-      <div className="text-[11px] text-[#ff8080] tracking-wide mb-2">{prompt}</div>
-      <div className="flex flex-wrap gap-2" style={{ marginBottom: other ? 8 : marginBottom }}>
-        {options.map((label) => (
-          <button key={label} className={chipClass(quicks.includes(label))} onClick={() => onToggle(label)}>
-            {label}
-          </button>
-        ))}
-        <button className={chipClass(other)} onClick={onToggleOther}>
-          OTRO (ESCRIBIR)
-        </button>
-      </div>
-      {other && (
-        <textarea
-          placeholder={placeholder}
-          value={custom}
-          onChange={(e) => onCustomChange(e.target.value)}
-          className={textareaClass}
-          style={{ marginBottom }}
-        />
-      )}
-    </>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -276,8 +153,22 @@ export default function App() {
     patch({ dbHistory: (data ?? []).map((row) => dbRowToHistoryRecord(row as DiaCerradoRow)), dbLoading: false });
   };
 
+  // Supabase is the source of truth for habit config. An empty table means
+  // first run: seed it with whatever this device has (defaults + old extras).
+  const loadHabits = async () => {
+    const { habits, error } = await fetchHabits();
+    if (error || !habits) { patch({ habitsError: error }); return; }
+    if (habits.length === 0) {
+      const seedError = await upsertHabits(useAppStore.getState().habits);
+      patch(seedError ? { habitsError: seedError } : { habitsSynced: true, habitsError: null });
+      return;
+    }
+    patch({ habits, habitsSynced: true, habitsError: null });
+  };
+
   useEffect(() => {
     fetchHistory();
+    loadHabits();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -293,34 +184,33 @@ export default function App() {
     flashTimeout.current = window.setTimeout(() => patch({ flash: false }), 900);
   };
 
-  const toggleQuick = (field: keyof AppState, label: string) => {
-    const list = state[field] as unknown as string[];
-    patch({ [field]: list.includes(label) ? list.filter((x) => x !== label) : [...list, label] } as Partial<AppState>);
+  const onFeedback = (ok: boolean, message: string) => {
+    showToast(message, ok ? 'green' : 'red');
+    if (!ok) triggerFlash();
   };
 
-  const finalizeReason = (quicks: string[], other: boolean, custom: string) =>
-    [...quicks, ...(other && custom.trim() ? [custom.trim()] : [])].join(', ');
+  const setEntry = (id: string, entry: HabitEntry) => patch({ entries: { ...state.entries, [id]: entry } });
 
-  const setLookmax = (key: keyof LookmaxState, val: DoneSkip) => {
-    const nextLookmax = { ...state.lookmax, [key]: val };
-    const wasComplete = state.lookmax.ice === 'done' && state.lookmax.jaw === 'done' && state.lookmax.eyes === 'done';
-    const nowComplete = nextLookmax.ice === 'done' && nextLookmax.jaw === 'done' && nextLookmax.eyes === 'done';
-    patch({ lookmax: nextLookmax });
-    if (!wasComplete && nowComplete) showToast('Rutina de lookmax completa. Los detalles construyen la cara.', 'green');
-  };
-
-  const addHabit = () => {
-    const name = state.newHabitName.trim();
-    if (!name) return;
-    const id = 'custom-' + Date.now();
-    patch({ extraHabits: [...state.extraHabits, { id, name: name.toUpperCase(), status: null }], newHabitName: '' });
+  // Local first so the UI never waits on the network; Supabase failures keep
+  // the change on this device and surface the sync error in settings.
+  const saveHabits = async (changed: HabitDef[]) => {
+    const byId = new Map(state.habits.map((h) => [h.id, h]));
+    changed.forEach((h) => byId.set(h.id, h));
+    patch({ habits: [...byId.values()] });
+    const error = await upsertHabits(changed);
+    if (error) {
+      patch({ habitsError: error });
+      showToast('Guardado solo en este dispositivo — Supabase no respondió.', 'red');
+    } else {
+      patch({ habitsError: null, habitsSynced: true });
+      showToast('Configuración guardada.', 'green');
+    }
   };
 
   const startDay = () => {
-    const now = new Date();
     patch({
       dayStarted: true,
-      dayStartTime: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      dayStartTime: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
     });
     showToast('Día iniciado. A partir de ahora, cada movimiento cuenta.', 'green');
   };
@@ -328,19 +218,10 @@ export default function App() {
   const startNewDay = () => {
     patch({
       dayStarted: false, dayStartTime: '',
-      nofap: null, nofapQuicks: [], nofapCustom: '', nofapOther: false,
-      diet: null, dietQuicks: [], dietCustom: '', dietOther: false,
-      protein: null, proteinQuicks: [], proteinCustom: '', proteinOther: false,
-      minox: null, minoxQuicks: [], minoxCustom: '', minoxOther: false,
-      workDone: null, workNote: '', workQuicks: [], workCustom: '', workOther: false,
-      sleep: null, sleepQuicks: [], sleepCustom: '', sleepOther: false,
-      gym: null, gymQuicks: [], gymCustom: '', gymOther: false,
-      scroll: null, scrollQuicks: [], scrollCustom: '', scrollOther: false,
-      lookmax: { ice: null, jaw: null, eyes: null },
-      pray: null, prayNotes: '', prayQuicks: [], prayCustom: '', prayOther: false,
+      entries: {},
       closed: false, closedTime: '', summary: null, summaryDismissed: false, tab: 'tracker',
     });
-    showToast('Nuevo día iniciado. Página en blanco, empieza a construir.', 'green');
+    showToast('Nuevo día. Responde cómo llegas y arranca.', 'green');
   };
 
   // -------------------------------------------------------------------------
@@ -349,33 +230,22 @@ export default function App() {
 
   const s = state;
 
-  const sleepIsNo = s.sleep === 'no';
-  const gymIsNone = s.gym === 'none';
-  const sleepFilled = s.sleepQuicks.length > 0 || (s.sleepOther && s.sleepCustom.trim().length > 0);
-  const gymFilled = s.gymQuicks.length > 0 || (s.gymOther && s.gymCustom.trim().length > 0);
-  const sleepBlocked = sleepIsNo && !sleepFilled;
-  const gymBlocked = gymIsNone && !gymFilled;
-  const answered = s.sleep !== null && s.gym !== null;
-  const canClose = answered && !sleepBlocked && !gymBlocked && !s.closed;
+  const activeHabits = s.habits
+    .filter((h) => h.activo)
+    .sort((a, b) => blockRank(a.bloque) - blockRank(b.bloque) || a.orden - b.orden);
+  const habitNumber = new Map(activeHabits.map((h, i) => [h.id, i + 1]));
+  const inicioHabits = activeHabits.filter((h) => h.bloque === 'inicio');
 
-  let blockReasonText = '';
-  if (!answered) blockReasonText = 'RESPONDE DORMIR Y GYM PARA CONTINUAR.';
-  else if (sleepBlocked) blockReasonText = 'FALTA EL VECTOR DE ATAQUE DEL SUEÑO.';
-  else if (gymBlocked) blockReasonText = 'FALTA LA RAZÓN DE NO ENTRENAR.';
+  // "Inicio" habits (sleep, prayer…) describe how you arrive at the day, so
+  // every one of them must be answered before the day can start.
+  const startBlocker = inicioHabits.find((h) => !isAnswered(h, s.entries[h.id]) || isBlocking(h, s.entries[h.id]));
+  const closeBlocker = activeHabits.find((h) => isBlocking(h, s.entries[h.id]));
+  const blockerText = (h: HabitDef | undefined, verb: string) =>
+    !h ? '' : !isAnswered(h, s.entries[h.id]) ? `RESPONDE ${h.nombre} PARA ${verb}.` : `FALTA LA RAZÓN DE ${h.nombre}.`;
+  const canClose = !closeBlocker && !s.closed;
 
-  const pillarMeta: PillarRecord[] = [
-    { id: 'sleep', name: 'DORMIR', ok: s.sleep === 'yes' },
-    { id: 'work', name: 'TRABAJO ÓPTIMO', ok: s.workDone === 'yes' },
-    { id: 'gym', name: 'GYM', ok: s.gym === 'go' || s.gym === 'home' },
-    { id: 'diet', name: 'DIETA', ok: s.diet === 'yes' },
-    { id: 'protein', name: 'PROTEÍNA Y CREATINA', ok: s.protein === 'yes' },
-    { id: 'minox', name: 'MINOXIDIL', ok: s.minox === 'yes' },
-    { id: 'nofap', name: 'NO-FAP', ok: s.nofap === 'kept' },
-    { id: 'scroll', name: 'REDES', ok: s.scroll === 'no' },
-    { id: 'lookmax', name: 'LOOKMAX', ok: s.lookmax.ice === 'done' && s.lookmax.jaw === 'done' && s.lookmax.eyes === 'done' },
-    { id: 'pray', name: 'ORAR', ok: s.pray === 'yes' },
-  ];
-  const todayRatio = pillarMeta.reduce((a, p) => a + (p.ok ? 1 : 0), 0) / pillarMeta.length;
+  const pillarMeta: PillarRecord[] = activeHabits.map((h) => ({ id: h.id, name: h.nombre, ok: isOk(h, s.entries[h.id]) }));
+  const todayRatio = pillarMeta.length ? pillarMeta.filter((p) => p.ok).length / pillarMeta.length : 0;
   const failedPillars = pillarMeta.filter((p) => !p.ok);
 
   const last6 = s.dbHistory.slice(-6);
@@ -413,36 +283,19 @@ export default function App() {
 
   const dayList = [...s.dbHistory].slice(-14).reverse().map((r, idx) => {
     const failed = r.pillars.filter((p) => !p.ok).map((p) => p.name);
-    const notes = [
-      r.sleepReason ? { tag: 'DORMIR', text: r.sleepReason } : null,
-      r.gymReason ? { tag: 'GYM', text: r.gymReason } : null,
-      r.workNote ? { tag: 'TRABAJO', text: r.workNote } : null,
-      r.workReason ? { tag: 'TRABAJO', text: r.workReason } : null,
-      r.prayNotes ? { tag: 'ORAR', text: r.prayNotes } : null,
-      r.prayReason ? { tag: 'ORAR', text: r.prayReason } : null,
-      r.scrollReason ? { tag: 'REDES', text: r.scrollReason } : null,
-      r.nofapReason ? { tag: 'NO-FAP', text: r.nofapReason } : null,
-      r.dietReason ? { tag: 'DIETA', text: r.dietReason } : null,
-      r.minoxReason ? { tag: 'MINOXIDIL', text: r.minoxReason } : null,
-      r.proteinReason ? { tag: 'PROTEÍNA', text: r.proteinReason } : null,
-    ].filter((n): n is { tag: string; text: string } => !!n);
     return {
       key: 'd' + idx,
       dateLabel: r.dateLabel,
       pctLabel: Math.round(r.ratio * 100) + '%',
       pctColor: r.ratio >= 0.7 ? '#f7931a' : r.ratio < 0.5 ? '#ff3333' : '#8a8a8a',
-      failed, hasFailed: failed.length > 0, notes, hasNotes: notes.length > 0,
-      notesGap: notes.length > 0 ? 6 : 0,
+      failed, hasFailed: failed.length > 0, notes: r.notes, hasNotes: r.notes.length > 0,
+      notesGap: r.notes.length > 0 ? 6 : 0,
       expanded: s.expandedIdx === idx,
     };
   });
 
-  const hasTodayActivity = !!(s.nofap || s.diet || s.minox || s.workDone || s.sleep || s.gym || s.scroll || s.pray ||
-    s.lookmax.ice || s.lookmax.jaw || s.lookmax.eyes);
+  const hasTodayActivity = Object.keys(s.entries).length > 0;
   const includeToday = !s.closed && hasTodayActivity;
-  // Falls back to hasTodayActivity so a day already in progress before this
-  // field existed (or a stale persisted state) never gets locked out.
-  const dayUnlocked = s.dayStarted || hasTodayActivity;
 
   let rawSeries: { label: string; ratio: number }[] = [];
   if (s.reportView === 'daily') {
@@ -451,21 +304,15 @@ export default function App() {
     if (includeToday) rawSeries.push({ label: 'HOY', ratio: todayRatio });
   } else {
     const groupBy = s.reportView;
-    const withDate = s.dbHistory.map((r, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - (s.dbHistory.length - i));
-      return { ratio: r.ratio, dateObj: d };
-    });
+    const withDate = s.dbHistory.map((r) => ({ ratio: r.ratio, dateObj: new Date(r.fecha + 'T00:00:00') }));
     if (includeToday) withDate.push({ ratio: todayRatio, dateObj: new Date() });
     const groups: Record<string, { sum: number; count: number; label: string; order: number }> = {};
     withDate.forEach((item) => {
       let key: string, label: string;
       if (groupBy === 'weekly') {
-        const d = new Date(item.dateObj);
-        const day = d.getDay();
-        const sunday = new Date(d);
-        sunday.setDate(d.getDate() - day);
-        key = sunday.toISOString().slice(0, 10);
+        const sunday = new Date(item.dateObj);
+        sunday.setDate(sunday.getDate() - sunday.getDay());
+        key = localDateStr(sunday);
         label = 'DOM ' + sunday.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
       } else if (groupBy === 'monthly') {
         key = item.dateObj.getFullYear() + '-' + item.dateObj.getMonth();
@@ -526,26 +373,14 @@ export default function App() {
     if (!canClose) return;
     const now = new Date();
 
-    const reasonById: Record<string, string> = {
-      sleep: s.sleep === 'no' ? finalizeReason(s.sleepQuicks, s.sleepOther, s.sleepCustom) : '',
-      gym: s.gym === 'none' ? finalizeReason(s.gymQuicks, s.gymOther, s.gymCustom) : '',
-      work: s.workDone === 'no' ? finalizeReason(s.workQuicks, s.workOther, s.workCustom) : '',
-      pray: s.pray === 'no' ? finalizeReason(s.prayQuicks, s.prayOther, s.prayCustom) : '',
-      scroll: s.scroll === 'yes' ? finalizeReason(s.scrollQuicks, s.scrollOther, s.scrollCustom) : '',
-      nofap: s.nofap === 'failed' ? finalizeReason(s.nofapQuicks, s.nofapOther, s.nofapCustom) : '',
-      diet: s.diet === 'no' ? finalizeReason(s.dietQuicks, s.dietOther, s.dietCustom) : '',
-      minox: s.minox === 'no' ? finalizeReason(s.minoxQuicks, s.minoxOther, s.minoxCustom) : '',
-      protein: s.protein === 'no' ? finalizeReason(s.proteinQuicks, s.proteinOther, s.proteinCustom) : '',
-    };
-
-    const detalle = {
+    const detalle: DiaCerradoDetalle = {
       habitos_logrados: pillarMeta.filter((p) => p.ok).map((p) => p.name),
-      vectores_ataque: failedPillars.map((p) => ({ pilar: p.name, razon: reasonById[p.id] || '' })),
+      vectores_ataque: failedPillars.map((p) => ({ pilar: p.name, razon: reasonText(s.entries[p.id]) })),
       pillars: pillarMeta,
-      workDone: s.workDone,
-      workNote: s.workNote.trim(),
-      prayNotes: s.prayNotes.trim(),
-      extraHabits: s.extraHabits,
+      notas: activeHabits
+        .filter((h) => s.entries[h.id]?.nota.trim())
+        .map((h) => ({ pilar: h.nombre, nota: s.entries[h.id].nota.trim() })),
+      respuestas: s.entries,
       horaInicio: s.dayStartTime || undefined,
     };
 
@@ -553,7 +388,7 @@ export default function App() {
     const summary: SummaryState = {
       pct: Math.round(todayRatio * 100),
       improve: failedPillars.map((p) => p.name),
-      quote: stoicQuotes[quoteId],
+      quote: stoicQuotes[quoteId] ?? genericQuote,
       callout: failedPillars.length
         ? calloutPool[Math.floor(Math.random() * calloutPool.length)]
         : successCallouts[Math.floor(Math.random() * successCallouts.length)],
@@ -589,6 +424,24 @@ export default function App() {
     showToast('Día cerrado. La auditoría de hoy queda registrada en tu historial real.', 'green');
     fetchHistory();
   };
+
+  const renderHabit = (h: HabitDef) => (
+    <HabitCard
+      key={h.id}
+      habit={h}
+      number={habitNumber.get(h.id) ?? 0}
+      entry={s.entries[h.id]}
+      onChange={(e) => setEntry(h.id, e)}
+      onFeedback={onFeedback}
+    />
+  );
+
+  const bigBtnStyle = (enabled: boolean) => ({
+    cursor: enabled ? 'pointer' : 'not-allowed',
+    background: enabled ? '#f7931a' : '#1a1a1a',
+    color: enabled ? '#0a0a0a' : '#555',
+    boxShadow: enabled ? '0 0 24px rgba(247,147,26,0.55)' : 'none',
+  });
 
   // -------------------------------------------------------------------------
   // Render
@@ -632,389 +485,47 @@ export default function App() {
           <>
             <div className="text-[11px] text-[#8a8a8a] tracking-[1.5px] uppercase mb-4">
               AUDITORÍA // {todayLabel}
-              {dayUnlocked && s.dayStartTime && (
+              {s.dayStarted && s.dayStartTime && (
                 <span className="text-[#6b6b6b] normal-case tracking-normal"> — iniciado a las {s.dayStartTime}</span>
               )}
             </div>
 
-            {!dayUnlocked ? (
-              <div className={cardClass}>
-                <div className={cardHeadClass}>ANTES DE EMPEZAR</div>
-                <div className={whyClass}>Marca el inicio de tu día. Desde ahí se habilita el resto — vas registrando cada apartado a medida que ocurre, no todo junto al final.</div>
-                <button
-                  onClick={startDay}
-                  className="w-full p-[18px] text-[15px] font-bold tracking-[2px] rounded-sm border-none cursor-pointer transition-all"
-                  style={{ background: '#f7931a', color: '#0a0a0a', boxShadow: '0 0 24px rgba(247,147,26,0.55)' }}
-                >
-                  INICIAR EL DÍA
-                </button>
+            {!s.dayStarted ? (
+              <div className="flex flex-col gap-3.5">
+                <div className={cardClass}>
+                  <div className={cardHeadClass}>ANTES DE EMPEZAR</div>
+                  <div className={whyClass} style={{ marginBottom: 0 }}>
+                    Responde cómo llegas al día — lo que pasó anoche y al despertar. Con eso se habilita el resto, que vas registrando a medida que ocurre.
+                  </div>
+                </div>
+                {inicioHabits.map(renderHabit)}
+                <div>
+                  <button
+                    disabled={!!startBlocker}
+                    onClick={startDay}
+                    className="w-full p-[18px] text-[15px] font-bold tracking-[2px] rounded-sm border-none transition-all"
+                    style={bigBtnStyle(!startBlocker)}
+                  >
+                    INICIAR EL DÍA
+                  </button>
+                  {startBlocker && (
+                    <div className="text-[11px] text-[#ff4d4d] mt-2.5">⚠ {blockerText(startBlocker, 'INICIAR')}</div>
+                  )}
+                </div>
               </div>
             ) : (
             <>
             <div className="flex flex-col gap-3.5">
-              {/* 01 DORMIR */}
-              <div className={cardClass}>
-                <div className={cardHeadClass}>01 // DORMIR — ¿DESCANSÉ REALMENTE BIEN?</div>
-                <div className={whyClass}>POR QUÉ: {whyNotes.sleep}</div>
-                <div className="flex gap-2.5" style={{ marginBottom: sleepIsNo ? 14 : 0 }}>
-                  <button
-                    className={btnClass(s.sleep === 'yes', 'green')}
-                    onClick={() => { patch({ sleep: 'yes', sleepQuicks: [], sleepCustom: '', sleepOther: false }); showToast('Descanso real. Hoy operas con ventaja.', 'green'); }}
-                  >
-                    DESCANSÉ BIEN
-                  </button>
-                  <button
-                    className={btnClass(s.sleep === 'no', 'red')}
-                    onClick={() => { patch({ sleep: 'no' }); triggerFlash(); showToast('Mal descanso. Encuentra el vector antes de que te corrija a ti.', 'red'); }}
-                  >
-                    DESCANSÉ MAL
-                  </button>
-                </div>
-                <ReasonPicker
-                  visible={sleepIsNo}
-                  prompt="¿POR QUÉ FUE? (VECTOR DE ATAQUE)"
-                  options={sleepReasons}
-                  quicks={s.sleepQuicks}
-                  other={s.sleepOther}
-                  custom={s.sleepCustom}
-                  onToggle={(label) => toggleQuick('sleepQuicks', label)}
-                  onToggleOther={() => patch({ sleepOther: !s.sleepOther })}
-                  onCustomChange={(v) => patch({ sleepCustom: v })}
-                  marginBottom={0}
-                  placeholder="Redacta el vector de ataque — obligatorio"
-                />
-              </div>
-
-              {/* 02 TRABAJO */}
-              <div className={cardClass}>
-                <div className={cardHeadClass}>02 // TRABAJO ÓPTIMO — VENTANA 08:30–18:30</div>
-                <div className={whyClass}>POR QUÉ: {whyNotes.work}</div>
-                <div className="flex gap-2.5 mb-3">
-                  <button
-                    className={btnClass(s.workDone === 'yes', 'green')}
-                    onClick={() => { patch({ workDone: 'yes' }); showToast('Ventana respetada. Tu tiempo es tuyo otra vez.', 'green'); }}
-                  >
-                    CUMPLIDO
-                  </button>
-                  <button
-                    className={btnClass(s.workDone === 'no', 'red')}
-                    onClick={() => { patch({ workDone: 'no' }); triggerFlash(); showToast('El tiempo se te escapó. Audita mañana con más filo.', 'red'); }}
-                  >
-                    NO CUMPLIDO
-                  </button>
-                </div>
-                <ReasonPicker
-                  visible={s.workDone === 'no'}
-                  prompt="¿QUÉ PASÓ?"
-                  options={workReasons}
-                  quicks={s.workQuicks}
-                  other={s.workOther}
-                  custom={s.workCustom}
-                  onToggle={(label) => toggleQuick('workQuicks', label)}
-                  onToggleOther={() => patch({ workOther: !s.workOther })}
-                  onCustomChange={(v) => patch({ workCustom: v })}
-                  marginBottom={12}
-                />
-                <input
-                  type="text"
-                  placeholder="Si terminaste antes, celébralo aquí"
-                  value={s.workNote}
-                  onChange={(e) => patch({ workNote: e.target.value })}
-                  className={inputClass}
-                />
-              </div>
-
-              {/* 03 GYM */}
-              <div className={cardClass}>
-                <div className={cardHeadClass}>03 // GYM</div>
-                <div className={whyClass}>POR QUÉ: {whyNotes.gym}</div>
-                <div className="flex gap-2 flex-wrap" style={{ marginBottom: gymIsNone ? 14 : 0 }}>
-                  <button
-                    className={btnClass(s.gym === 'go', 'green')}
-                    onClick={() => { patch({ gym: 'go', gymQuicks: [], gymCustom: '', gymOther: false }); showToast('Cuerpo entrenado, mente templada.', 'green'); }}
-                  >
-                    FUI AL GYM
-                  </button>
-                  <button
-                    className={btnClass(s.gym === 'home', 'green')}
-                    onClick={() => { patch({ gym: 'home', gymQuicks: [], gymCustom: '', gymOther: false }); showToast('Entrenaste donde estabas. Eso también es soberanía.', 'green'); }}
-                  >
-                    ENTRENÉ EN CASA
-                  </button>
-                  <button
-                    className={btnClass(s.gym === 'none', 'red')}
-                    onClick={() => { patch({ gym: 'none' }); triggerFlash(); showToast('Sin entrenamiento hoy. Que no se repita mañana.', 'red'); }}
-                  >
-                    NO ENTRENÉ
-                  </button>
-                </div>
-                <ReasonPicker
-                  visible={gymIsNone}
-                  prompt="RAZÓN"
-                  options={gymReasons}
-                  quicks={s.gymQuicks}
-                  other={s.gymOther}
-                  custom={s.gymCustom}
-                  onToggle={(label) => toggleQuick('gymQuicks', label)}
-                  onToggleOther={() => patch({ gymOther: !s.gymOther })}
-                  onCustomChange={(v) => patch({ gymCustom: v })}
-                  marginBottom={0}
-                  placeholder="Redacta la razón — obligatorio"
-                />
-              </div>
-
-              {/* 04 DIETA */}
-              <div className={cardClass}>
-                <div className={cardHeadClass}>04 // DIETA — ¿COMÍ BIEN HOY?</div>
-                <div className={whyClass}>POR QUÉ: {whyNotes.diet}</div>
-                <div className="flex gap-2.5" style={{ marginBottom: s.diet === 'no' ? 14 : 0 }}>
-                  <button
-                    className={btnClass(s.diet === 'yes', 'green')}
-                    onClick={() => { patch({ diet: 'yes', dietQuicks: [], dietCustom: '', dietOther: false }); showToast('Combustible limpio, mente clara.', 'green'); }}
-                  >
-                    COMÍ BIEN
-                  </button>
-                  <button
-                    className={btnClass(s.diet === 'no', 'red')}
-                    onClick={() => { patch({ diet: 'no' }); triggerFlash(); showToast('Comiste basura y lo sabes. Mañana no hay excusa.', 'red'); }}
-                  >
-                    COMÍ MAL
-                  </button>
-                </div>
-                <ReasonPicker
-                  visible={s.diet === 'no'}
-                  prompt="¿QUÉ PASÓ?"
-                  options={dietReasons}
-                  quicks={s.dietQuicks}
-                  other={s.dietOther}
-                  custom={s.dietCustom}
-                  onToggle={(label) => toggleQuick('dietQuicks', label)}
-                  onToggleOther={() => patch({ dietOther: !s.dietOther })}
-                  onCustomChange={(v) => patch({ dietCustom: v })}
-                  marginBottom={0}
-                />
-              </div>
-
-              {/* 05 PROTEÍNA */}
-              <div className={cardClass}>
-                <div className={cardHeadClass}>05 // PROTEÍNA Y CREATINA — ¿LAS TOMÉ HOY?</div>
-                <div className={whyClass}>POR QUÉ: {whyNotes.protein}</div>
-                <div className="flex gap-2.5" style={{ marginBottom: s.protein === 'no' ? 14 : 0 }}>
-                  <button
-                    className={btnClass(s.protein === 'yes', 'green')}
-                    onClick={() => { patch({ protein: 'yes', proteinQuicks: [], proteinCustom: '', proteinOther: false }); showToast('Nutrición cubierta. Tu cuerpo puede recuperarse en serio.', 'green'); }}
-                  >
-                    SÍ LAS TOMÉ
-                  </button>
-                  <button
-                    className={btnClass(s.protein === 'no', 'red')}
-                    onClick={() => { patch({ protein: 'no' }); triggerFlash(); showToast('No tomaste lo que tu cuerpo necesitaba. Marca por qué.', 'red'); }}
-                  >
-                    NO LAS TOMÉ
-                  </button>
-                </div>
-                <ReasonPicker
-                  visible={s.protein === 'no'}
-                  prompt="¿QUÉ PASÓ?"
-                  options={proteinReasons}
-                  quicks={s.proteinQuicks}
-                  other={s.proteinOther}
-                  custom={s.proteinCustom}
-                  onToggle={(label) => toggleQuick('proteinQuicks', label)}
-                  onToggleOther={() => patch({ proteinOther: !s.proteinOther })}
-                  onCustomChange={(v) => patch({ proteinCustom: v })}
-                  marginBottom={0}
-                />
-              </div>
-
-              {/* 06 MINOXIDIL */}
-              <div className={cardClass}>
-                <div className={cardHeadClass}>06 // MINOXIDIL — ¿ME APLIQUÉ HOY?</div>
-                <div className={whyClass}>POR QUÉ: {whyNotes.minox}</div>
-                <div className="flex gap-2.5" style={{ marginBottom: s.minox === 'no' ? 14 : 0 }}>
-                  <button
-                    className={btnClass(s.minox === 'yes', 'green')}
-                    onClick={() => { patch({ minox: 'yes' }); showToast('Constancia silenciosa. Así se construye el resultado.', 'green'); }}
-                  >
-                    ME APLIQUÉ
-                  </button>
-                  <button
-                    className={btnClass(s.minox === 'no', 'red')}
-                    onClick={() => { patch({ minox: 'no' }); triggerFlash(); showToast('Un día salteado es un día perdido en el espejo.', 'red'); }}
-                  >
-                    NO ME APLIQUÉ
-                  </button>
-                </div>
-                <ReasonPicker
-                  visible={s.minox === 'no'}
-                  prompt="¿QUÉ PASÓ?"
-                  options={minoxReasons}
-                  quicks={s.minoxQuicks}
-                  other={s.minoxOther}
-                  custom={s.minoxCustom}
-                  onToggle={(label) => toggleQuick('minoxQuicks', label)}
-                  onToggleOther={() => patch({ minoxOther: !s.minoxOther })}
-                  onCustomChange={(v) => patch({ minoxCustom: v })}
-                  marginBottom={0}
-                />
-              </div>
-
-              {/* 07 NO-FAP */}
-              <div className={cardClass}>
-                <div className={cardHeadClass}>07 // NO-FAP</div>
-                <div className={whyClass}>POR QUÉ: {whyNotes.nofap}</div>
-                <div className="flex gap-2.5" style={{ marginBottom: s.nofap === 'failed' ? 14 : 0 }}>
-                  <button
-                    className={btnClass(s.nofap === 'kept', 'green')}
-                    onClick={() => { patch({ nofap: 'kept' }); showToast('Disciplina intacta. Sigues siendo dueño de tu energía.', 'green'); }}
-                  >
-                    MANTENIDO
-                  </button>
-                  <button
-                    className={btnClass(s.nofap === 'failed', 'red')}
-                    onClick={() => { patch({ nofap: 'failed' }); triggerFlash(); showToast('Cediste el control. Levántate de nuevo, hoy mismo.', 'red'); }}
-                  >
-                    FALLIDO
-                  </button>
-                </div>
-                <ReasonPicker
-                  visible={s.nofap === 'failed'}
-                  prompt="¿QUÉ PASÓ?"
-                  options={nofapReasons}
-                  quicks={s.nofapQuicks}
-                  other={s.nofapOther}
-                  custom={s.nofapCustom}
-                  onToggle={(label) => toggleQuick('nofapQuicks', label)}
-                  onToggleOther={() => patch({ nofapOther: !s.nofapOther })}
-                  onCustomChange={(v) => patch({ nofapCustom: v })}
-                  marginBottom={0}
-                />
-              </div>
-
-              {/* 08 REDES */}
-              <div className={cardClass}>
-                <div className={cardHeadClass}>08 // REDES — ¿SCROLLEASTE SIN PROPÓSITO?</div>
-                <div className={whyClass}>POR QUÉ: {whyNotes.scroll}</div>
-                <div className="flex gap-2.5" style={{ marginBottom: s.scroll === 'yes' ? 14 : 0 }}>
-                  <button
-                    className={btnClass(s.scroll === 'no', 'green')}
-                    onClick={() => { patch({ scroll: 'no', scrollQuicks: [], scrollCustom: '', scrollOther: false }); showToast('Atención intacta. Nadie te robó tu foco hoy.', 'green'); }}
-                  >
-                    NO SCROLLEÉ
-                  </button>
-                  <button
-                    className={btnClass(s.scroll === 'yes', 'red')}
-                    onClick={() => { patch({ scroll: 'yes' }); triggerFlash(); showToast('Le regalaste tu atención a un algoritmo. Escribe por qué cediste.', 'red'); }}
-                  >
-                    SCROLLEÉ
-                  </button>
-                </div>
-                <ReasonPicker
-                  visible={s.scroll === 'yes'}
-                  prompt="¿POR QUÉ CEDISTE?"
-                  options={scrollReasons}
-                  quicks={s.scrollQuicks}
-                  other={s.scrollOther}
-                  custom={s.scrollCustom}
-                  onToggle={(label) => toggleQuick('scrollQuicks', label)}
-                  onToggleOther={() => patch({ scrollOther: !s.scrollOther })}
-                  onCustomChange={(v) => patch({ scrollCustom: v })}
-                  marginBottom={0}
-                  placeholder="Redacta por qué cediste"
-                />
-              </div>
-
-              {/* 09 LOOKMAX */}
-              <div className={cardClass}>
-                <div className={cardHeadClass}>09 // LOOKMAX</div>
-                <div className={whyClass}>POR QUÉ: {whyNotes.lookmax}</div>
-                <div className="flex flex-col gap-3">
-                  {([
-                    ['HIELO EN LOS OJOS', 'ice'],
-                    ['EJERCICIO DE JAWLINE', 'jaw'],
-                    ['EJERCICIO DE OJOS', 'eyes'],
-                  ] as const).map(([label, key]) => (
-                    <div key={key} className="flex items-center justify-between gap-3">
-                      <span className="text-[13px] text-[#c9c9c9] tracking-wide">{label}</span>
-                      <div className="flex gap-2">
-                        <button className={btnClass(s.lookmax[key] === 'done', 'green')} onClick={() => setLookmax(key, 'done')}>HECHO</button>
-                        <button className={btnClass(s.lookmax[key] === 'skip', 'red')} onClick={() => setLookmax(key, 'skip')}>NO LO HICE</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 10 ORAR */}
-              <div className={cardClass}>
-                <div className={cardHeadClass}>10 // ORAR</div>
-                <div className={whyClass}>POR QUÉ: {whyNotes.pray}</div>
-                <div className="flex gap-2.5" style={{ marginBottom: s.pray === 'no' ? 14 : 0 }}>
-                  <button
-                    className={btnClass(s.pray === 'yes', 'green')}
-                    onClick={() => { patch({ pray: 'yes' }); showToast('Gratitud registrada. La paz también es una métrica.', 'green'); }}
-                  >
-                    ORÉ
-                  </button>
-                  <button
-                    className={btnClass(s.pray === 'no', 'red')}
-                    onClick={() => { patch({ pray: 'no' }); showToast('Ni un minuto de quietud hoy. El ruido gana si no lo detienes.', 'red'); }}
-                  >
-                    NO ORÉ
-                  </button>
-                </div>
-                <ReasonPicker
-                  visible={s.pray === 'no'}
-                  prompt="¿QUÉ PASÓ?"
-                  options={prayReasons}
-                  quicks={s.prayQuicks}
-                  other={s.prayOther}
-                  custom={s.prayCustom}
-                  onToggle={(label) => toggleQuick('prayQuicks', label)}
-                  onToggleOther={() => patch({ prayOther: !s.prayOther })}
-                  onCustomChange={(v) => patch({ prayCustom: v })}
-                  marginBottom={12}
-                />
-                <textarea
-                  placeholder="Notas cortas (opcional)"
-                  value={s.prayNotes}
-                  onChange={(e) => patch({ prayNotes: e.target.value })}
-                  className={textareaClass}
-                  style={{ marginTop: 12 }}
-                />
-              </div>
-
-              {/* EXTRA HABITS */}
-              {s.extraHabits.length > 0 && (
-                <>
-                  <div className="text-[11px] text-[#6b6b6b] tracking-wide mt-1.5">HÁBITOS EXTRA</div>
-                  {s.extraHabits.map((h) => (
-                    <div
-                      key={h.id}
-                      className="bg-[#111111] rounded-sm p-[16px_18px] border"
-                      style={{ borderColor: h.status === 'failed' ? '#3a1616' : '#232323' }}
-                    >
-                      <div className="flex items-center justify-between flex-wrap gap-2.5">
-                        <span className="text-[13px] font-semibold text-[#e5e5e5]">{h.name}</span>
-                        <div className="flex gap-2">
-                          <button
-                            className={btnClass(h.status === 'done', 'green')}
-                            onClick={() => { patch({ extraHabits: s.extraHabits.map((x) => (x.id === h.id ? { ...x, status: 'done' } : x)) }); showToast('Registrado. Un punto más para la soberanía.', 'green'); }}
-                          >
-                            LOGRADO
-                          </button>
-                          <button
-                            className={btnClass(h.status === 'failed', 'red')}
-                            onClick={() => { patch({ extraHabits: s.extraHabits.map((x) => (x.id === h.id ? { ...x, status: 'failed' } : x)) }); triggerFlash(); showToast('Fallaste. No lo justifiques, corrígelo mañana.', 'red'); }}
-                          >
-                            FALLIDO
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
+              {BLOQUES.map((b) => {
+                const list = activeHabits.filter((h) => h.bloque === b.id);
+                if (!list.length) return null;
+                return (
+                  <Fragment key={b.id}>
+                    <div className={sectionLabelClass}>{b.label}</div>
+                    {list.map(renderHabit)}
+                  </Fragment>
+                );
+              })}
             </div>
 
             {/* Close day */}
@@ -1023,17 +534,12 @@ export default function App() {
                 disabled={!s.closed && !canClose}
                 onClick={onCloseDay}
                 className="w-full p-[18px] text-[15px] font-bold tracking-[2px] rounded-sm border-none transition-all"
-                style={{
-                  cursor: canClose || s.closed ? 'pointer' : 'not-allowed',
-                  background: canClose || s.closed ? '#f7931a' : '#1a1a1a',
-                  color: canClose || s.closed ? '#0a0a0a' : '#555',
-                  boxShadow: canClose || s.closed ? '0 0 24px rgba(247,147,26,0.55)' : 'none',
-                }}
+                style={bigBtnStyle(canClose || s.closed)}
               >
                 {s.closed ? 'INICIAR NUEVO DÍA' : 'CERRAR MI DÍA'}
               </button>
               {!canClose && !s.closed && (
-                <div className="text-[11px] text-[#ff4d4d] mt-2.5">⚠ {blockReasonText}</div>
+                <div className="text-[11px] text-[#ff4d4d] mt-2.5">⚠ {blockerText(closeBlocker, 'CONTINUAR')}</div>
               )}
             </div>
             </>
@@ -1271,37 +777,12 @@ export default function App() {
         {/* SETTINGS TAB */}
         {/* -------------------------------------------------------------- */}
         {s.tab === 'settings' && (
-          <>
-            <div className="text-[11px] text-[#8a8a8a] tracking-[1.5px] uppercase mb-4">GESTOR // HÁBITOS EXTRA</div>
-            <div className="bg-[#111111] border border-[#232323] rounded-sm p-5">
-              <div className="text-[12px] text-[#c9c9c9] mb-3">NUEVO HÁBITO</div>
-              <div className="flex flex-col gap-2.5">
-                <input
-                  type="text"
-                  placeholder="Nombre del hábito (ej. Leer 20 min)"
-                  value={s.newHabitName}
-                  onChange={(e) => patch({ newHabitName: e.target.value })}
-                  className={inputClass}
-                />
-                <button
-                  className="w-full text-[12px] font-bold tracking-wide p-[11px_14px] bg-[#f7931a] text-[#0a0a0a] border-none rounded-sm cursor-pointer"
-                  onClick={addHabit}
-                >
-                  AGREGAR
-                </button>
-              </div>
-            </div>
-            <div className="mt-[18px]">
-              <div className="text-[11px] text-[#6b6b6b] tracking-wide mb-2.5">HÁBITOS EXTRA ACTIVOS ({s.extraHabits.length})</div>
-              <div className="flex flex-col gap-2">
-                {s.extraHabits.map((h) => (
-                  <div key={h.id} className="text-[13px] text-[#c9c9c9] bg-[#111111] border border-[#232323] rounded-sm px-4 py-3">
-                    {h.name}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
+          <SettingsTab
+            habits={s.habits}
+            syncError={s.habitsError}
+            onSave={saveHabits}
+            onError={(msg) => showToast(msg, 'red')}
+          />
         )}
       </div>
 

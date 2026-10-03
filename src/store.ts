@@ -1,23 +1,15 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { DEFAULT_HABITS, emptyEntry } from './habits';
+import type { HabitDef, HabitEntry } from './habits';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type YesNo = 'yes' | 'no' | null;
-export type KeptFailed = 'kept' | 'failed' | null;
-export type GymStatus = 'go' | 'home' | 'none' | null;
-export type DoneSkip = 'done' | 'skip' | null;
 export type Tab = 'tracker' | 'reports' | 'settings';
 export type ReportView = 'daily' | 'weekly' | 'monthly' | 'annual';
 export type Tone = 'green' | 'red';
-
-export interface LookmaxState {
-  ice: DoneSkip;
-  jaw: DoneSkip;
-  eyes: DoneSkip;
-}
 
 export interface PillarRecord {
   id: string;
@@ -26,28 +18,12 @@ export interface PillarRecord {
 }
 
 export interface HistoryRecord {
+  fecha: string;
   ratio: number;
   dateLabel: string;
   shortLabel: string;
-  workDone: string | null;
-  sleepReason: string;
-  gymReason: string;
-  workNote: string;
-  workReason?: string;
-  prayNotes: string;
-  prayReason?: string;
-  scrollReason?: string;
-  nofapReason?: string;
-  dietReason?: string;
-  minoxReason?: string;
-  proteinReason?: string;
   pillars: PillarRecord[];
-}
-
-export interface ExtraHabit {
-  id: string;
-  name: string;
-  status: 'done' | 'failed' | null;
+  notes: { tag: string; text: string }[];
 }
 
 export interface ToastState {
@@ -64,19 +40,13 @@ export interface SummaryState {
 
 export interface AppState {
   tab: Tab;
+  // Habit definitions. Supabase (`habitos`) is the source of truth; this is
+  // the local cache used until it loads, or if it's unreachable.
+  habits: HabitDef[];
+  habitsSynced: boolean; habitsError: string | null;
+  // Today's answers, keyed by habit id.
+  entries: Record<string, HabitEntry>;
   dayStarted: boolean; dayStartTime: string;
-  nofap: KeptFailed; nofapQuicks: string[]; nofapCustom: string; nofapOther: boolean;
-  diet: YesNo; dietQuicks: string[]; dietCustom: string; dietOther: boolean;
-  protein: YesNo; proteinQuicks: string[]; proteinCustom: string; proteinOther: boolean;
-  minox: YesNo; minoxQuicks: string[]; minoxCustom: string; minoxOther: boolean;
-  workDone: YesNo; workNote: string; workQuicks: string[]; workCustom: string; workOther: boolean;
-  sleep: YesNo; sleepQuicks: string[]; sleepCustom: string; sleepOther: boolean;
-  gym: GymStatus; gymQuicks: string[]; gymCustom: string; gymOther: boolean;
-  scroll: YesNo; scrollQuicks: string[]; scrollCustom: string; scrollOther: boolean;
-  lookmax: LookmaxState;
-  pray: YesNo; prayNotes: string; prayQuicks: string[]; prayCustom: string; prayOther: boolean;
-  extraHabits: ExtraHabit[];
-  newHabitName: string;
   closed: boolean; closedTime: string; summary: SummaryState | null; summaryDismissed: boolean;
   dbHistory: HistoryRecord[]; dbLoading: boolean; dbError: string | null;
   expandedIdx: number | null;
@@ -89,26 +59,17 @@ interface AppStore extends AppState {
 }
 
 // ---------------------------------------------------------------------------
-// Initial state — every habit, counter, streak and failure reason starts
-// empty. No seed/demo data: production always boots from a clean slate.
+// Initial state — no seed/demo data: production always boots from a clean
+// slate (the default habit definitions are config, not tracked data).
 // ---------------------------------------------------------------------------
 
 function buildInitialState(): AppState {
   return {
     tab: 'tracker',
+    habits: DEFAULT_HABITS,
+    habitsSynced: false, habitsError: null,
+    entries: {},
     dayStarted: false, dayStartTime: '',
-    nofap: null, nofapQuicks: [], nofapCustom: '', nofapOther: false,
-    diet: null, dietQuicks: [], dietCustom: '', dietOther: false,
-    protein: null, proteinQuicks: [], proteinCustom: '', proteinOther: false,
-    minox: null, minoxQuicks: [], minoxCustom: '', minoxOther: false,
-    workDone: null, workNote: '', workQuicks: [], workCustom: '', workOther: false,
-    sleep: null, sleepQuicks: [], sleepCustom: '', sleepOther: false,
-    gym: null, gymQuicks: [], gymCustom: '', gymOther: false,
-    scroll: null, scrollQuicks: [], scrollCustom: '', scrollOther: false,
-    lookmax: { ice: null, jaw: null, eyes: null },
-    pray: null, prayNotes: '', prayQuicks: [], prayCustom: '', prayOther: false,
-    extraHabits: [],
-    newHabitName: '',
     closed: false, closedTime: '', summary: null, summaryDismissed: false,
     dbHistory: [], dbLoading: false, dbError: null,
     expandedIdx: null,
@@ -118,14 +79,77 @@ function buildInitialState(): AppState {
 }
 
 // Fields intentionally excluded from persistence: they're ephemeral UI state
-// (toast/flash animations, current tab/chart view, in-progress drafts) that
-// should never survive a reload — only real tracked records should.
-// dbHistory/dbLoading/dbError mirror Supabase and are refetched on load, so
-// they're excluded too rather than cached stale in localStorage.
+// (toast/flash animations, current tab/chart view) that should never survive
+// a reload — only real tracked records should. dbHistory/dbLoading/dbError
+// and the habit sync flags mirror Supabase and are refetched on load.
 const TRANSIENT_KEYS = [
-  'toast', 'flash', 'tab', 'reportView', 'selectedPointIdx', 'expandedIdx', 'newHabitName', 'patch',
-  'dbHistory', 'dbLoading', 'dbError',
+  'toast', 'flash', 'tab', 'reportView', 'selectedPointIdx', 'expandedIdx', 'patch',
+  'dbHistory', 'dbLoading', 'dbError', 'habitsSynced', 'habitsError',
 ] as const;
+
+// ---------------------------------------------------------------------------
+// v0 -> v1 migration: before habits were configurable, each habit had its own
+// hardcoded fields (sleep/sleepQuicks/…). Convert an in-progress day into
+// per-habit entries, and turn the old "extra habits" into real HabitDefs.
+// ---------------------------------------------------------------------------
+
+type LegacyState = Record<string, unknown> & {
+  lookmax?: Record<string, 'done' | 'skip' | null>;
+  extraHabits?: { id: string; name: string; status: 'done' | 'failed' | null }[];
+};
+
+function migrateV0(old: LegacyState): Partial<AppState> {
+  const entries: Record<string, HabitEntry> = {};
+  const legacy: [id: string, field: string, quicks: string | null, notes: string | null][] = [
+    ['sleep', 'sleep', 'sleep', null], ['pray', 'pray', 'pray', 'prayNotes'], ['work', 'workDone', 'work', 'workNote'],
+    ['gym', 'gym', 'gym', null], ['diet', 'diet', 'diet', null], ['protein', 'protein', 'protein', null],
+    ['minox', 'minox', 'minox', null], ['nofap', 'nofap', 'nofap', null], ['scroll', 'scroll', 'scroll', null],
+  ];
+  for (const [id, field, q, notes] of legacy) {
+    const value = old[field] as string | null | undefined;
+    const nota = notes ? (old[notes] as string) || '' : '';
+    if (!value && !nota) continue;
+    entries[id] = {
+      ...emptyEntry(),
+      opcion: value ?? null,
+      razones: (old[q + 'Quicks'] as string[]) || [],
+      otro: !!old[q + 'Other'],
+      custom: (old[q + 'Custom'] as string) || '',
+      nota,
+    };
+  }
+  const lm = old.lookmax;
+  if (lm && (lm.ice || lm.jaw || lm.eyes)) {
+    const sub: HabitEntry['subtareas'] = {};
+    if (lm.ice) sub['HIELO EN LOS OJOS'] = lm.ice;
+    if (lm.jaw) sub['EJERCICIO DE JAWLINE'] = lm.jaw;
+    if (lm.eyes) sub['EJERCICIO DE OJOS'] = lm.eyes;
+    entries.lookmax = { ...emptyEntry(), subtareas: sub };
+  }
+
+  const extras = old.extraHabits ?? [];
+  const habits: HabitDef[] = [
+    ...DEFAULT_HABITS,
+    ...extras.map((x, i): HabitDef => ({
+      id: x.id, nombre: x.name, pregunta: '', porQue: '', bloque: 'dia', orden: DEFAULT_HABITS.length + i, activo: true,
+      opciones: [{ id: 'done', label: 'LOGRADO', ok: true }, { id: 'failed', label: 'FALLIDO', ok: false }],
+      subtareas: [], razones: [], razonObligatoria: false, conNota: false,
+    })),
+  ];
+  for (const x of extras) if (x.status) entries[x.id] = { ...emptyEntry(), opcion: x.status };
+
+  return {
+    habits,
+    entries,
+    // The old app unlocked the day on any activity, so keep that day open.
+    dayStarted: !!old.dayStarted || Object.keys(entries).length > 0,
+    dayStartTime: (old.dayStartTime as string) || '',
+    closed: !!old.closed,
+    closedTime: (old.closedTime as string) || '',
+    summary: (old.summary as SummaryState) ?? null,
+    summaryDismissed: !!old.summaryDismissed,
+  };
+}
 
 export const useAppStore = create<AppStore>()(
   persist(
@@ -135,7 +159,12 @@ export const useAppStore = create<AppStore>()(
     }),
     {
       name: 'sovereign-os-storage-v3',
+      version: 1,
       storage: createJSONStorage(() => localStorage),
+      migrate: (persisted, version) => {
+        if (version === 0) return migrateV0((persisted ?? {}) as LegacyState) as AppStore;
+        return persisted as AppStore;
+      },
       partialize: (state) => {
         const persisted = { ...state } as Partial<AppStore>;
         for (const key of TRANSIENT_KEYS) delete persisted[key];

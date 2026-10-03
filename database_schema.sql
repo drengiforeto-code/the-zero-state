@@ -49,3 +49,48 @@ create policy "Allow anon update on dias_cerrados"
   to anon
   using (true)
   with check (true);
+
+-- =============================================================================
+-- habitos — configurable habit definitions (edited from the CONFIG tab).
+-- The app seeds this table with its defaults on first load if it's empty.
+-- Habits are never deleted from the app, only archived (activo = false), so
+-- past days in dias_cerrados keep referring to real habits.
+-- =============================================================================
+
+create table if not exists public.habitos (
+  id          text primary key,
+  orden       integer not null default 0,
+  activo      boolean not null default true,
+  config      jsonb not null,
+  updated_at  timestamptz not null default now()
+);
+
+comment on table public.habitos is 'Habit definitions for The Sovereign OS tracker.';
+comment on column public.habitos.config is
+  'JSON: { nombre, pregunta, porQue, bloque: inicio|manana|dia|noche, opciones: {id,label,ok,mensaje?}[], subtareas: string[], razones: string[], razonObligatoria, conNota }';
+
+create or replace function public.habitos_touch_updated_at()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists habitos_touch_updated_at on public.habitos;
+create trigger habitos_touch_updated_at
+  before update on public.habitos
+  for each row execute function public.habitos_touch_updated_at();
+
+-- Same open, no-auth model as dias_cerrados (see note above). No delete
+-- policy on purpose: the app archives habits instead of deleting them.
+alter table public.habitos enable row level security;
+
+create policy "Allow anon read on habitos"
+  on public.habitos for select to anon using (true);
+
+create policy "Allow anon insert on habitos"
+  on public.habitos for insert to anon with check (true);
+
+create policy "Allow anon update on habitos"
+  on public.habitos for update to anon using (true) with check (true);
