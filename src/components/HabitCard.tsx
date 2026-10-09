@@ -1,3 +1,4 @@
+import { Check, X } from 'lucide-react';
 import { emptyEntry, isChecklist, isFailed, isOk } from '../habits';
 import type { HabitDef, HabitEntry, SubStatus } from '../habits';
 import { btnClass, cardClass, cardHeadClass, chipClass, inputClass, textareaClass, whyClass } from '../ui';
@@ -19,6 +20,7 @@ export default function HabitCard({
   onFeedback: (ok: boolean, message: string) => void;
 }) {
   const failed = isFailed(habit, entry);
+  const ok = !failed && isOk(habit, entry);
   const showReasons = failed && !isChecklist(habit);
 
   const pickOption = (id: string) => {
@@ -40,9 +42,32 @@ export default function HabitCard({
     onChange({ ...entry, razones: entry.razones.includes(label) ? entry.razones.filter((x) => x !== label) : [...entry.razones, label] });
 
   return (
-    <div className={cardClass} style={failed ? { borderColor: '#3a1616' } : undefined}>
-      <div className={cardHeadClass}>
-        {String(number).padStart(2, '0')} // {habit.nombre}{habit.pregunta ? ` — ${habit.pregunta}` : ''}
+    // A coloured left edge + status badge make the state of every habit
+    // readable at a glance while scrolling the day.
+    <div
+      className={`${cardClass} transition-colors duration-200`}
+      style={failed
+        ? { borderColor: '#3a1616', borderLeftColor: '#ff3333', borderLeftWidth: 3 }
+        : ok
+          ? { borderColor: '#3a2a12', borderLeftColor: '#f7931a', borderLeftWidth: 3 }
+          : undefined}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className={cardHeadClass}>
+          {String(number).padStart(2, '0')} // {habit.nombre}{habit.pregunta ? ` — ${habit.pregunta}` : ''}
+        </div>
+        <span
+          className="shrink-0 w-[18px] h-[18px] rounded-full flex items-center justify-center border transition-colors duration-200"
+          style={{
+            background: failed ? '#ff3333' : ok ? '#f7931a' : 'transparent',
+            borderColor: failed ? '#ff3333' : ok ? '#f7931a' : '#333',
+          }}
+          role="img"
+          aria-label={failed ? 'Fallado' : ok ? 'Cumplido' : 'Pendiente'}
+        >
+          {failed && <X size={11} color="#0a0a0a" strokeWidth={3} />}
+          {ok && <Check size={11} color="#0a0a0a" strokeWidth={3} />}
+        </span>
       </div>
       {habit.porQue && <div className={whyClass}>POR QUÉ: {habit.porQue}</div>}
 

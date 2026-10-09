@@ -10,9 +10,38 @@
   color: #0a0a0a;
 }
 
+:root {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   background: #0a0a0a;
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Visible keyboard focus everywhere (inputs already highlight their border). */
+:focus-visible {
+  outline: 2px solid #f7931a;
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
+/* Tactile press feedback on every enabled button. */
+button {
+  transition: transform 0.08s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+button:disabled {
+  cursor: not-allowed;
 }
 
 a {
@@ -42,14 +71,47 @@ a:hover {
   50% { box-shadow: 0 0 28px rgba(255, 51, 51, 0.8); }
 }
 
+@keyframes tzs-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes tzs-modal-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes tzs-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes tzs-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-tzs-fade-in { animation: tzs-fade-in 0.18s ease; }
+.animate-tzs-modal-in { animation: tzs-modal-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.animate-tzs-pulse { animation: tzs-pulse 1.2s ease-in-out infinite; }
+.animate-tzs-rise { animation: tzs-rise 0.3s ease both; }
+
 .animate-tzs-blink {
   animation: tzs-blink 1.1s step-end infinite;
 }
 
 .animate-tzs-toast-in-green {
-  animation: tzs-toast-in 0.25s ease, tzs-glow-green 1.1s ease-in-out infinite;
+  animation: tzs-toast-in 0.25s ease, tzs-glow-green 1.1s ease-in-out 2;
 }
 
 .animate-tzs-toast-in-red {
-  animation: tzs-toast-in 0.25s ease, tzs-glow-red 1.1s ease-in-out infinite;
+  animation: tzs-toast-in 0.25s ease, tzs-glow-red 1.1s ease-in-out 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
