@@ -1,14 +1,15 @@
 import { Fragment, useEffect, useRef } from 'react';
-import { Circle, BarChart3, Settings, ChevronDown } from 'lucide-react';
+import { Circle, BarChart3, Settings } from 'lucide-react';
 import { useAppStore } from './store';
 import { supabase, supabaseConfigError } from './lib/supabase';
 import { fetchHabits, upsertHabits } from './lib/habitsRepo';
-import { BLOQUES, isAnswered, isBlocking, isOk, reasonText } from './habits';
+import { BLOQUES, isAnswered, isBlocking, isOk, moveNightHabitsToInicio, reasonText } from './habits';
 import type { Bloque, HabitDef, HabitEntry } from './habits';
 import type { HistoryRecord, PillarRecord, SummaryState, Tone } from './store';
 import HabitCard from './components/HabitCard';
 import SettingsTab from './components/SettingsTab';
-import { cardClass, cardHeadClass, sectionLabelClass, tabBtnClass, viewBtnClass, whyClass } from './ui';
+import HistoryList from './components/HistoryList';
+import { cardClass, cardHeadClass, sectionLabelClass, tabBtnClass, tierColor, viewBtnClass, whyClass } from './ui';
 
 // ---------------------------------------------------------------------------
 // Static content
@@ -67,10 +68,6 @@ function smoothPath(pts: { x: number; y: number }[]): string {
     d += `C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${p2.x},${p2.y} `;
   }
   return d;
-}
-
-function tierColor(v: number): string {
-  return v >= 0.7 ? '#f7931a' : v < 0.5 ? '#ff3333' : '#8a8a8a';
 }
 
 // Local calendar date as 'YYYY-MM-DD'. NOT toISOString().slice(0,10) — that
@@ -159,11 +156,71 @@ export default function App() {
     const { habits, error } = await fetchHabits();
     if (error || !habits) { patch({ habitsError: error }); return; }
     if (habits.length === 0) {
-      const seedError = await upsertHabits(useAppStore.getState().habits);
-      patch(seedError ? { habitsError: seedError } : { habitsSynced: true, habitsError: null });
+      const seed = moveNightHabitsToInicio(useAppStore.getState().habits).habits;
+      const seedError = await upsertHabits(seed);
+      patch(seedError ? { habitsError: seedError } : { habits: seed, habitsSynced: true, habitsError: null, nightHabitsMoved: true });
+      return;
+    }
+    // One-off: habits about last night move to the start-of-day block.
+    if (!useAppStore.getState().nightHabitsMoved) {
+      const moved = moveNightHabitsToInicio(habits);
+      const moveError = moved.changed.length ? await upsertHabits(moved.changed) : null;
+      patch(moveError
+        ? { habits, habitsSynced: true, habitsError: moveError }
+        : { habits: moved.habits, habitsSynced: true, habitsError: null, nightHabitsMoved: true });
       return;
     }
     patch({ habits, habitsSynced: true, habitsError: null });
+  };
+
+  // -------------------------------------------------------------------------
+  // History editing. Rows are addressed by `fecha` (unique per day). Supabase
+  // reports a blocked write (missing RLS policy) as success with 0 rows, so
+  // every write asks for the affected rows back and checks them.
+  // -------------------------------------------------------------------------
+
+  const updateDay = async (fecha: string, pillars: PillarRecord[]): Promise<boolean> => {
+    if (!supabase) { showToast('Supabase no está configurado: ' + supabaseConfigError, 'red'); return false; }
+    const { data, error } = await supabase.from('dias_cerrados').select('detalle').eq('fecha', fecha).single();
+    if (error || !data) { showToast('No se pudo leer ese día: ' + (error?.message ?? 'no existe'), 'red'); return false; }
+    const prev = data.detalle as DiaCerradoDetalle;
+    const reasons = new Map((prev.vectores_ataque ?? []).map((v) => [v.pilar, v.razon]));
+    const detalle: DiaCerradoDetalle = {
+      ...prev,
+      pillars,
+      habitos_logrados: pillars.filter((p) => p.ok).map((p) => p.name),
+      vectores_ataque: pillars.filter((p) => !p.ok).map((p) => ({ pilar: p.name, razon: reasons.get(p.name) ?? '' })),
+    };
+    const score = pillars.length ? Math.round((pillars.filter((p) => p.ok).length / pillars.length) * 100) : 0;
+    const { data: updated, error: updateError } = await supabase
+      .from('dias_cerrados').update({ score_coherencia: score, detalle }).eq('fecha', fecha).select('fecha');
+    if (updateError) { showToast('No se pudo guardar: ' + updateError.message, 'red'); return false; }
+    if (!updated?.length) { showToast('No se guardó nada: Supabase bloqueó la edición.', 'red'); return false; }
+    showToast('Día actualizado.', 'green');
+    fetchHistory();
+    return true;
+  };
+
+  const deleteBlockedMessage = 'Supabase bloqueó el borrado. Falta el permiso de borrar: ejecuta el SQL de borrado (está en database_schema.sql).';
+
+  const deleteDay = async (fecha: string): Promise<boolean> => {
+    if (!supabase) { showToast('Supabase no está configurado: ' + supabaseConfigError, 'red'); return false; }
+    const { data, error } = await supabase.from('dias_cerrados').delete().eq('fecha', fecha).select('fecha');
+    if (error) { showToast('No se pudo borrar: ' + error.message, 'red'); return false; }
+    if (!data?.length) { showToast(deleteBlockedMessage, 'red'); return false; }
+    showToast('Día borrado.', 'green');
+    fetchHistory();
+    return true;
+  };
+
+  const deleteAllDays = async (): Promise<boolean> => {
+    if (!supabase) { showToast('Supabase no está configurado: ' + supabaseConfigError, 'red'); return false; }
+    const { data, error } = await supabase.from('dias_cerrados').delete().gte('fecha', '1900-01-01').select('fecha');
+    if (error) { showToast('No se pudo borrar: ' + error.message, 'red'); return false; }
+    if (!data?.length) { showToast(deleteBlockedMessage, 'red'); return false; }
+    showToast(`Historial borrado (${data.length} días).`, 'green');
+    fetchHistory();
+    return true;
   };
 
   useEffect(() => {
@@ -244,7 +301,9 @@ export default function App() {
     !h ? '' : !isAnswered(h, s.entries[h.id]) ? `RESPONDE ${h.nombre} PARA ${verb}.` : `FALTA LA RAZÓN DE ${h.nombre}.`;
   const canClose = !closeBlocker && !s.closed;
 
-  const answeredCount = activeHabits.filter((h) => isAnswered(h, s.entries[h.id])).length;
+  // Before the day starts the strip tracks only the start-of-day questions.
+  const stripHabits = s.dayStarted ? activeHabits : inicioHabits;
+  const stripAnswered = stripHabits.filter((h) => isAnswered(h, s.entries[h.id])).length;
 
   const pillarMeta: PillarRecord[] = activeHabits.map((h) => ({ id: h.id, name: h.nombre, ok: isOk(h, s.entries[h.id]) }));
   const todayRatio = pillarMeta.length ? pillarMeta.filter((p) => p.ok).length / pillarMeta.length : 0;
@@ -282,19 +341,6 @@ export default function App() {
     const pct = t.total ? Math.round((t.ok / t.total) * 100) : 0;
     return { name, pct, color: pct >= 70 ? '#f7931a' : pct < 50 ? '#ff3333' : '#8a8a8a' };
   }).sort((a, b) => b.pct - a.pct);
-
-  const dayList = [...s.dbHistory].slice(-14).reverse().map((r, idx) => {
-    const failed = r.pillars.filter((p) => !p.ok).map((p) => p.name);
-    return {
-      key: 'd' + idx,
-      dateLabel: r.dateLabel,
-      pctLabel: Math.round(r.ratio * 100) + '%',
-      pctColor: r.ratio >= 0.7 ? '#f7931a' : r.ratio < 0.5 ? '#ff3333' : '#8a8a8a',
-      failed, hasFailed: failed.length > 0, notes: r.notes, hasNotes: r.notes.length > 0,
-      notesGap: r.notes.length > 0 ? 6 : 0,
-      expanded: s.expandedIdx === idx,
-    };
-  });
 
   const hasTodayActivity = Object.keys(s.entries).length > 0;
   const includeToday = !s.closed && hasTodayActivity;
@@ -487,25 +533,25 @@ export default function App() {
           </div>
 
           {/* Day progress: one segment per habit — orange done, red failed, grey pending. */}
-          {s.tab === 'tracker' && s.dayStarted && activeHabits.length > 0 && (
+          {s.tab === 'tracker' && stripHabits.length > 0 && (
             <div>
               <div
                 className="flex gap-[3px]"
                 role="progressbar"
                 aria-label="Hábitos registrados hoy"
                 aria-valuemin={0}
-                aria-valuemax={activeHabits.length}
-                aria-valuenow={answeredCount}
+                aria-valuemax={stripHabits.length}
+                aria-valuenow={stripAnswered}
               >
-                {activeHabits.map((h) => {
+                {stripHabits.map((h) => {
                   const e = s.entries[h.id];
                   const color = !isAnswered(h, e) ? '#232323' : isOk(h, e) ? '#f7931a' : '#ff3333';
                   return <div key={h.id} className="h-1 flex-1 rounded-full transition-colors duration-300" style={{ background: color }} />;
                 })}
               </div>
               <div className="flex justify-between text-[10px] tracking-wide text-[#8a8a8a] mt-1.5">
-                <span>{answeredCount}/{activeHabits.length} REGISTRADOS</span>
-                <span style={{ color: tierColor(todayRatio) }}>{Math.round(todayRatio * 100)}% COHERENCIA</span>
+                <span>{stripAnswered}/{stripHabits.length} REGISTRADOS</span>
+                {s.dayStarted && <span style={{ color: tierColor(todayRatio) }}>{Math.round(todayRatio * 100)}% COHERENCIA</span>}
               </div>
             </div>
           )}
@@ -798,56 +844,8 @@ export default function App() {
               </div>
             )}
 
-            {dayList.length > 0 && (
-              <div className="mt-6">
-                <div className="text-[11px] text-[#8a8a8a] tracking-wide mb-3">HISTORIAL DIARIO — TOCA UN DÍA PARA VER EL DETALLE</div>
-                <div className="flex flex-col gap-2">
-                  {dayList.map((d, idx) => {
-                    return (
-                      <div key={d.key} className="bg-[#111111] border border-[#232323] rounded-sm">
-                        <button
-                          type="button"
-                          aria-expanded={d.expanded}
-                          className="w-full text-left bg-transparent border-0 p-[14px_16px] cursor-pointer text-inherit"
-                          onClick={() => patch({ expandedIdx: s.expandedIdx === idx ? null : idx })}
-                        >
-                          <div className="flex justify-between items-center">
-                            <span className="text-[12px] text-[#c9c9c9] tracking-wide">{d.dateLabel}</span>
-                            <span className="flex items-center gap-2">
-                              <span className="text-[13px] font-bold" style={{ color: d.pctColor }}>{d.pctLabel}</span>
-                              <ChevronDown size={14} color="#7d7d7d" className={`transition-transform duration-200 ${d.expanded ? 'rotate-180' : ''}`} />
-                            </span>
-                          </div>
-                          <div className="bg-[#1c1c1c] rounded-full h-[3px] w-full overflow-hidden mt-2.5">
-                            <div className="h-full rounded-full" style={{ width: d.pctLabel, background: d.pctColor }} />
-                          </div>
-                        </button>
-                        {d.expanded && (
-                          <div className="mx-4 mb-4 border-t border-[#232323] pt-3">
-                            {d.hasFailed && (
-                              <>
-                                <div className="text-[10px] text-[#ff8080] tracking-wide mb-1.5">FALLASTE EN</div>
-                                <div className="flex flex-wrap gap-1.5" style={{ marginBottom: d.notesGap }}>
-                                  {d.failed.map((name) => (
-                                    <span key={name} className="text-[11px] text-[#ff8080] border border-[#3a1e1e] bg-[rgba(255,51,51,0.08)] px-[9px] py-[5px] rounded-sm">
-                                      {name}
-                                    </span>
-                                  ))}
-                                </div>
-                              </>
-                            )}
-                            {d.hasNotes && d.notes.map((n, i) => (
-                              <div key={i} className="text-[12px] text-[#c9c9c9] leading-[1.5] mt-1">
-                                <span className="text-[#ff8a4d]">[{n.tag}]</span> {n.text}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+            {s.dbHistory.length > 0 && (
+              <HistoryList records={s.dbHistory} onSave={updateDay} onDelete={deleteDay} onDeleteAll={deleteAllDays} />
             )}
           </div>
         )}

@@ -4,12 +4,12 @@
 // ---------------------------------------------------------------------------
 
 // Order in which blocks appear during the day. 'inicio' habits are answered
-// inside the "INICIAR EL DÍA" card (they're about last night / waking up) and
-// must all be answered before the day can start.
+// before "INICIAR EL DÍA" (they're about last night / waking up) and must all
+// be answered before the day can start.
 export type Bloque = 'inicio' | 'manana' | 'dia' | 'noche';
 
 export const BLOQUES: { id: Bloque; label: string; hint: string }[] = [
-  { id: 'inicio', label: 'INICIO', hint: 'Obligatorio para iniciar el día' },
+  { id: 'inicio', label: 'INICIO', hint: 'Anoche y al despertar · obligatorio para iniciar el día' },
   { id: 'manana', label: 'MAÑANA', hint: 'Rutina al empezar' },
   { id: 'dia', label: 'DURANTE EL DÍA', hint: 'Se registra cuando ocurre' },
   { id: 'noche', label: 'NOCHE', hint: 'Antes de cerrar el día' },
@@ -116,7 +116,7 @@ export const DEFAULT_HABITS: HabitDef[] = [
   },
   {
     id: 'lookmax', nombre: 'LOOKMAX', pregunta: '', porQue: 'Los detalles son la diferencia entre bueno y memorable.',
-    bloque: 'manana', orden: 2, activo: true,
+    bloque: 'inicio', orden: 2, activo: true,
     opciones: [], subtareas: ['HIELO EN LOS OJOS', 'EJERCICIO DE JAWLINE', 'EJERCICIO DE OJOS'], razones: [],
     razonObligatoria: false, conNota: false,
   },
@@ -157,14 +157,14 @@ export const DEFAULT_HABITS: HabitDef[] = [
   },
   {
     id: 'minox', nombre: 'MINOXIDIL', pregunta: '¿ME APLIQUÉ HOY?', porQue: 'Los resultados compuestos premian la constancia.',
-    bloque: 'dia', orden: 7, activo: true,
+    bloque: 'inicio', orden: 7, activo: true,
     opciones: yesNo('ME APLIQUÉ', 'NO ME APLIQUÉ', 'Constancia silenciosa. Así se construye el resultado.', 'Un día salteado es un día perdido en el espejo.'),
     subtareas: [], razones: ['Se me olvidó', 'Falta de tiempo', 'Pereza', 'No tenía a la mano'],
     razonObligatoria: false, conNota: false,
   },
   {
     id: 'nofap', nombre: 'NO-FAP', pregunta: '', porQue: 'Preserva tu energía y tu foco mental.',
-    bloque: 'noche', orden: 8, activo: true,
+    bloque: 'inicio', orden: 8, activo: true,
     opciones: [
       { id: 'kept', label: 'MANTENIDO', ok: true, mensaje: 'Disciplina intacta. Sigues siendo dueño de tu energía.' },
       { id: 'failed', label: 'FALLIDO', ok: false, mensaje: 'Cediste el control. Levántate de nuevo, hoy mismo.' },
@@ -174,7 +174,7 @@ export const DEFAULT_HABITS: HabitDef[] = [
   },
   {
     id: 'scroll', nombre: 'REDES', pregunta: '¿SCROLLEASTE SIN PROPÓSITO?', porQue: 'Cada scroll sin propósito es atención robada.',
-    bloque: 'noche', orden: 9, activo: true,
+    bloque: 'inicio', orden: 9, activo: true,
     opciones: [
       { id: 'no', label: 'NO SCROLLEÉ', ok: true, mensaje: 'Atención intacta. Nadie te robó tu foco hoy.' },
       { id: 'yes', label: 'SCROLLEÉ', ok: false, mensaje: 'Le regalaste tu atención a un algoritmo. Escribe por qué cediste.' },
@@ -183,3 +183,27 @@ export const DEFAULT_HABITS: HabitDef[] = [
     razonObligatoria: false, conNota: false,
   },
 ];
+
+// ---------------------------------------------------------------------------
+// One-off migration: these habits describe last night, so they now belong to
+// the start-of-day block. Only habits still sitting in their old default block
+// are moved — anything the user already relocated by hand is left alone.
+// ---------------------------------------------------------------------------
+
+const MOVED_TO_INICIO: Record<string, Bloque> = {
+  lookmax: 'manana',
+  minox: 'dia',
+  nofap: 'noche',
+  scroll: 'noche',
+};
+
+export function moveNightHabitsToInicio(habits: HabitDef[]): { habits: HabitDef[]; changed: HabitDef[] } {
+  const changed: HabitDef[] = [];
+  const next = habits.map((h) => {
+    if (MOVED_TO_INICIO[h.id] !== h.bloque) return h;
+    const moved = { ...h, bloque: 'inicio' as Bloque };
+    changed.push(moved);
+    return moved;
+  });
+  return { habits: next, changed };
+}

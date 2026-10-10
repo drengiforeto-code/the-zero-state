@@ -4,6 +4,11 @@ import type { Tone } from './store';
 // Tailwind class helpers shared across tabs
 // ---------------------------------------------------------------------------
 
+// Colour for a 0–1 coherence ratio: orange = sovereign, red = slavery, grey = in between.
+export function tierColor(v: number): string {
+  return v >= 0.7 ? '#f7931a' : v < 0.5 ? '#ff3333' : '#8a8a8a';
+}
+
 export function btnClass(active: boolean, tone: Tone): string {
   const active2 = tone === 'red'
     ? 'bg-[rgba(255,51,51,0.12)] text-[#ff3333] border-[#ff3333]'

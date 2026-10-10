@@ -50,6 +50,14 @@ create policy "Allow anon update on dias_cerrados"
   using (true)
   with check (true);
 
+-- Lets the Reports tab delete closed days (single day or the whole history).
+-- Safe to re-run: drops the policy first.
+drop policy if exists "Allow anon delete on dias_cerrados" on public.dias_cerrados;
+create policy "Allow anon delete on dias_cerrados"
+  on public.dias_cerrados for delete
+  to anon
+  using (true);
+
 -- =============================================================================
 -- habitos — configurable habit definitions (edited from the CONFIG tab).
 -- The app seeds this table with its defaults on first load if it's empty.
