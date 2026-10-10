@@ -44,12 +44,14 @@ export interface AppState {
   // the local cache used until it loads, or if it's unreachable.
   habits: HabitDef[];
   habitsSynced: boolean; habitsError: string | null;
+  // Set once the "last night" habits were moved to the start block (see
+  // moveNightHabitsToInicio) so the move never runs twice.
+  nightHabitsMoved: boolean;
   // Today's answers, keyed by habit id.
   entries: Record<string, HabitEntry>;
   dayStarted: boolean; dayStartTime: string;
   closed: boolean; closedTime: string; summary: SummaryState | null; summaryDismissed: boolean;
   dbHistory: HistoryRecord[]; dbLoading: boolean; dbError: string | null;
-  expandedIdx: number | null;
   reportView: ReportView; selectedPointIdx: number | null;
   toast: ToastState | null; flash: boolean;
 }
@@ -67,12 +69,11 @@ function buildInitialState(): AppState {
   return {
     tab: 'tracker',
     habits: DEFAULT_HABITS,
-    habitsSynced: false, habitsError: null,
+    habitsSynced: false, habitsError: null, nightHabitsMoved: false,
     entries: {},
     dayStarted: false, dayStartTime: '',
     closed: false, closedTime: '', summary: null, summaryDismissed: false,
     dbHistory: [], dbLoading: false, dbError: null,
-    expandedIdx: null,
     reportView: 'daily', selectedPointIdx: null,
     toast: null, flash: false,
   };
@@ -83,7 +84,7 @@ function buildInitialState(): AppState {
 // a reload — only real tracked records should. dbHistory/dbLoading/dbError
 // and the habit sync flags mirror Supabase and are refetched on load.
 const TRANSIENT_KEYS = [
-  'toast', 'flash', 'tab', 'reportView', 'selectedPointIdx', 'expandedIdx', 'patch',
+  'toast', 'flash', 'tab', 'reportView', 'selectedPointIdx', 'patch',
   'dbHistory', 'dbLoading', 'dbError', 'habitsSynced', 'habitsError',
 ] as const;
 

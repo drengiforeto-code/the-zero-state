@@ -128,7 +128,7 @@ export default function SettingsTab({
                 </button>
               ))}
             </div>
-            <div className="text-[10px] text-[#6b6b6b] mt-1.5">{BLOQUES.find((b) => b.id === h.bloque)?.hint}</div>
+            <div className="text-[10px] text-[#7d7d7d] mt-1.5">{BLOQUES.find((b) => b.id === h.bloque)?.hint}</div>
           </div>
 
           <div>
@@ -161,7 +161,7 @@ export default function SettingsTab({
                       {o.ok ? '✓ CUMPLE' : '✗ FALLA'}
                     </button>
                     <button
-                      className={`${smallBtnClass} shrink-0 text-[#6b6b6b] border-[#2a2a2a]`}
+                      className={`${smallBtnClass} shrink-0 text-[#7d7d7d] border-[#2a2a2a]`}
                       onClick={() => setH({ opciones: h.opciones.filter((_, j) => j !== i) })}
                       aria-label="Quitar opción"
                     >
@@ -191,7 +191,7 @@ export default function SettingsTab({
                       onChange={(e) => setH({ subtareas: h.subtareas.map((x, j) => (j === i ? e.target.value : x)) })}
                     />
                     <button
-                      className={`${smallBtnClass} shrink-0 text-[#6b6b6b] border-[#2a2a2a]`}
+                      className={`${smallBtnClass} shrink-0 text-[#7d7d7d] border-[#2a2a2a]`}
                       onClick={() => setH({ subtareas: h.subtareas.filter((_, j) => j !== i) })}
                       aria-label="Quitar subtarea"
                     >
@@ -256,21 +256,24 @@ export default function SettingsTab({
         return (
           <div key={b.id} className="mb-5">
             <div className="text-[11px] text-[#f7931a] tracking-wide">{b.label}</div>
-            <div className="text-[10px] text-[#6b6b6b] mb-2">{b.hint}</div>
-            {list.length === 0 && <div className="text-[11px] text-[#4a4a4a] italic">Sin hábitos</div>}
+            <div className="text-[10px] text-[#7d7d7d] mb-2">{b.hint}</div>
+            {list.length === 0 && <div className="text-[11px] text-[#666666] italic">Sin hábitos</div>}
             <div className="flex flex-col gap-2">
               {list.map((h, i) => (
-                <div key={h.id} className="bg-[#111111] border border-[#232323] rounded-sm px-3 py-2.5 flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
+                <div key={h.id} className="bg-[#111111] border border-[#232323] rounded-sm p-3 flex flex-col gap-2.5">
+                  <div className="min-w-0">
                     <div className="text-[13px] text-[#e5e5e5] truncate">{h.nombre}</div>
-                    <div className="text-[10px] text-[#6b6b6b] truncate">
+                    <div className="text-[10px] text-[#7d7d7d] truncate">
                       {isChecklist(h) ? `CHECKLIST · ${h.subtareas.length} subtareas` : h.opciones.map((o) => o.label).join(' / ')}
                     </div>
                   </div>
-                  <button className={`${smallBtnClass} text-[#8a8a8a] border-[#2a2a2a] disabled:opacity-30`} disabled={i === 0} onClick={() => move(h, -1)} aria-label="Subir">↑</button>
-                  <button className={`${smallBtnClass} text-[#8a8a8a] border-[#2a2a2a] disabled:opacity-30`} disabled={i === list.length - 1} onClick={() => move(h, 1)} aria-label="Bajar">↓</button>
-                  <button className={`${smallBtnClass} text-[#f7931a] border-[#3a2a12]`} onClick={() => edit(h)}>EDITAR</button>
-                  <button className={`${smallBtnClass} text-[#ff8080] border-[#3a1e1e]`} onClick={() => onSave([{ ...h, activo: false }])}>QUITAR</button>
+                  <div className="flex items-center gap-2">
+                    <button className={`${smallBtnClass} text-[#8a8a8a] border-[#2a2a2a] disabled:opacity-30`} disabled={i === 0} onClick={() => move(h, -1)} aria-label="Subir">↑</button>
+                    <button className={`${smallBtnClass} text-[#8a8a8a] border-[#2a2a2a] disabled:opacity-30`} disabled={i === list.length - 1} onClick={() => move(h, 1)} aria-label="Bajar">↓</button>
+                    <div className="flex-1" />
+                    <button className={`${smallBtnClass} text-[#f7931a] border-[#3a2a12]`} onClick={() => edit(h)}>EDITAR</button>
+                    <button className={`${smallBtnClass} text-[#ff8080] border-[#3a1e1e]`} onClick={() => onSave([{ ...h, activo: false }])}>QUITAR</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -280,12 +283,12 @@ export default function SettingsTab({
 
       {archived.length > 0 && (
         <div className="mt-7">
-          <div className="text-[11px] text-[#6b6b6b] tracking-wide mb-1">ARCHIVADOS ({archived.length})</div>
-          <div className="text-[10px] text-[#4a4a4a] mb-2">No cuentan en el día, pero su historial se conserva.</div>
+          <div className="text-[11px] text-[#7d7d7d] tracking-wide mb-1">ARCHIVADOS ({archived.length})</div>
+          <div className="text-[10px] text-[#666666] mb-2">No cuentan en el día, pero su historial se conserva.</div>
           <div className="flex flex-col gap-2">
             {archived.map((h) => (
               <div key={h.id} className="bg-[#0d0d0d] border border-[#1c1c1c] rounded-sm px-3 py-2.5 flex items-center gap-2">
-                <span className="flex-1 text-[12px] text-[#6b6b6b] truncate">{h.nombre}</span>
+                <span className="flex-1 text-[12px] text-[#7d7d7d] truncate">{h.nombre}</span>
                 <button
                   className={`${smallBtnClass} text-[#8a8a8a] border-[#2a2a2a]`}
                   onClick={() => onSave([{ ...h, activo: true, orden: Math.max(...habits.map((x) => x.orden)) + 1 }])}

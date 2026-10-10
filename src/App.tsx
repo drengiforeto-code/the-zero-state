@@ -3,12 +3,13 @@ import { Circle, BarChart3, Settings } from 'lucide-react';
 import { useAppStore } from './store';
 import { supabase, supabaseConfigError } from './lib/supabase';
 import { fetchHabits, upsertHabits } from './lib/habitsRepo';
-import { BLOQUES, isAnswered, isBlocking, isOk, reasonText } from './habits';
+import { BLOQUES, isAnswered, isBlocking, isOk, moveNightHabitsToInicio, reasonText } from './habits';
 import type { Bloque, HabitDef, HabitEntry } from './habits';
 import type { HistoryRecord, PillarRecord, SummaryState, Tone } from './store';
 import HabitCard from './components/HabitCard';
 import SettingsTab from './components/SettingsTab';
-import { cardClass, cardHeadClass, sectionLabelClass, tabBtnClass, viewBtnClass, whyClass } from './ui';
+import HistoryList from './components/HistoryList';
+import { cardClass, cardHeadClass, sectionLabelClass, tabBtnClass, tierColor, viewBtnClass, whyClass } from './ui';
 
 // ---------------------------------------------------------------------------
 // Static content
@@ -67,10 +68,6 @@ function smoothPath(pts: { x: number; y: number }[]): string {
     d += `C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${p2.x},${p2.y} `;
   }
   return d;
-}
-
-function tierColor(v: number): string {
-  return v >= 0.7 ? '#f7931a' : v < 0.5 ? '#ff3333' : '#8a8a8a';
 }
 
 // Local calendar date as 'YYYY-MM-DD'. NOT toISOString().slice(0,10) — that
@@ -159,11 +156,71 @@ export default function App() {
     const { habits, error } = await fetchHabits();
     if (error || !habits) { patch({ habitsError: error }); return; }
     if (habits.length === 0) {
-      const seedError = await upsertHabits(useAppStore.getState().habits);
-      patch(seedError ? { habitsError: seedError } : { habitsSynced: true, habitsError: null });
+      const seed = moveNightHabitsToInicio(useAppStore.getState().habits).habits;
+      const seedError = await upsertHabits(seed);
+      patch(seedError ? { habitsError: seedError } : { habits: seed, habitsSynced: true, habitsError: null, nightHabitsMoved: true });
+      return;
+    }
+    // One-off: habits about last night move to the start-of-day block.
+    if (!useAppStore.getState().nightHabitsMoved) {
+      const moved = moveNightHabitsToInicio(habits);
+      const moveError = moved.changed.length ? await upsertHabits(moved.changed) : null;
+      patch(moveError
+        ? { habits, habitsSynced: true, habitsError: moveError }
+        : { habits: moved.habits, habitsSynced: true, habitsError: null, nightHabitsMoved: true });
       return;
     }
     patch({ habits, habitsSynced: true, habitsError: null });
+  };
+
+  // -------------------------------------------------------------------------
+  // History editing. Rows are addressed by `fecha` (unique per day). Supabase
+  // reports a blocked write (missing RLS policy) as success with 0 rows, so
+  // every write asks for the affected rows back and checks them.
+  // -------------------------------------------------------------------------
+
+  const updateDay = async (fecha: string, pillars: PillarRecord[]): Promise<boolean> => {
+    if (!supabase) { showToast('Supabase no está configurado: ' + supabaseConfigError, 'red'); return false; }
+    const { data, error } = await supabase.from('dias_cerrados').select('detalle').eq('fecha', fecha).single();
+    if (error || !data) { showToast('No se pudo leer ese día: ' + (error?.message ?? 'no existe'), 'red'); return false; }
+    const prev = data.detalle as DiaCerradoDetalle;
+    const reasons = new Map((prev.vectores_ataque ?? []).map((v) => [v.pilar, v.razon]));
+    const detalle: DiaCerradoDetalle = {
+      ...prev,
+      pillars,
+      habitos_logrados: pillars.filter((p) => p.ok).map((p) => p.name),
+      vectores_ataque: pillars.filter((p) => !p.ok).map((p) => ({ pilar: p.name, razon: reasons.get(p.name) ?? '' })),
+    };
+    const score = pillars.length ? Math.round((pillars.filter((p) => p.ok).length / pillars.length) * 100) : 0;
+    const { data: updated, error: updateError } = await supabase
+      .from('dias_cerrados').update({ score_coherencia: score, detalle }).eq('fecha', fecha).select('fecha');
+    if (updateError) { showToast('No se pudo guardar: ' + updateError.message, 'red'); return false; }
+    if (!updated?.length) { showToast('No se guardó nada: Supabase bloqueó la edición.', 'red'); return false; }
+    showToast('Día actualizado.', 'green');
+    fetchHistory();
+    return true;
+  };
+
+  const deleteBlockedMessage = 'Supabase bloqueó el borrado. Falta el permiso de borrar: ejecuta el SQL de borrado (está en database_schema.sql).';
+
+  const deleteDay = async (fecha: string): Promise<boolean> => {
+    if (!supabase) { showToast('Supabase no está configurado: ' + supabaseConfigError, 'red'); return false; }
+    const { data, error } = await supabase.from('dias_cerrados').delete().eq('fecha', fecha).select('fecha');
+    if (error) { showToast('No se pudo borrar: ' + error.message, 'red'); return false; }
+    if (!data?.length) { showToast(deleteBlockedMessage, 'red'); return false; }
+    showToast('Día borrado.', 'green');
+    fetchHistory();
+    return true;
+  };
+
+  const deleteAllDays = async (): Promise<boolean> => {
+    if (!supabase) { showToast('Supabase no está configurado: ' + supabaseConfigError, 'red'); return false; }
+    const { data, error } = await supabase.from('dias_cerrados').delete().gte('fecha', '1900-01-01').select('fecha');
+    if (error) { showToast('No se pudo borrar: ' + error.message, 'red'); return false; }
+    if (!data?.length) { showToast(deleteBlockedMessage, 'red'); return false; }
+    showToast(`Historial borrado (${data.length} días).`, 'green');
+    fetchHistory();
+    return true;
   };
 
   useEffect(() => {
@@ -244,6 +301,10 @@ export default function App() {
     !h ? '' : !isAnswered(h, s.entries[h.id]) ? `RESPONDE ${h.nombre} PARA ${verb}.` : `FALTA LA RAZÓN DE ${h.nombre}.`;
   const canClose = !closeBlocker && !s.closed;
 
+  // Before the day starts the strip tracks only the start-of-day questions.
+  const stripHabits = s.dayStarted ? activeHabits : inicioHabits;
+  const stripAnswered = stripHabits.filter((h) => isAnswered(h, s.entries[h.id])).length;
+
   const pillarMeta: PillarRecord[] = activeHabits.map((h) => ({ id: h.id, name: h.nombre, ok: isOk(h, s.entries[h.id]) }));
   const todayRatio = pillarMeta.length ? pillarMeta.filter((p) => p.ok).length / pillarMeta.length : 0;
   const failedPillars = pillarMeta.filter((p) => !p.ok);
@@ -280,19 +341,6 @@ export default function App() {
     const pct = t.total ? Math.round((t.ok / t.total) * 100) : 0;
     return { name, pct, color: pct >= 70 ? '#f7931a' : pct < 50 ? '#ff3333' : '#8a8a8a' };
   }).sort((a, b) => b.pct - a.pct);
-
-  const dayList = [...s.dbHistory].slice(-14).reverse().map((r, idx) => {
-    const failed = r.pillars.filter((p) => !p.ok).map((p) => p.name);
-    return {
-      key: 'd' + idx,
-      dateLabel: r.dateLabel,
-      pctLabel: Math.round(r.ratio * 100) + '%',
-      pctColor: r.ratio >= 0.7 ? '#f7931a' : r.ratio < 0.5 ? '#ff3333' : '#8a8a8a',
-      failed, hasFailed: failed.length > 0, notes: r.notes, hasNotes: r.notes.length > 0,
-      notesGap: r.notes.length > 0 ? 6 : 0,
-      expanded: s.expandedIdx === idx,
-    };
-  });
 
   const hasTodayActivity = Object.keys(s.entries).length > 0;
   const includeToday = !s.closed && hasTodayActivity;
@@ -367,6 +415,13 @@ export default function App() {
   const todayLabel = today.toLocaleDateString('es-ES', { weekday: 'long', day: '2-digit', month: 'long' }).toUpperCase();
 
   const summaryVisible = s.closed && !!s.summary && !s.summaryDismissed;
+
+  useEffect(() => {
+    if (!summaryVisible) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') patch({ summaryDismissed: true }); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [summaryVisible, patch]);
 
   const onCloseDay = async () => {
     if (s.closed) { startNewDay(); return; }
@@ -452,7 +507,7 @@ export default function App() {
       className="min-h-screen text-[#e5e5e5] transition-colors duration-200"
       style={{ background: s.flash ? '#2a0808' : '#0a0a0a' }}
     >
-      <div className="max-w-[460px] mx-auto px-4 pb-[100px]">
+      <div className="max-w-[460px] mx-auto px-4 pb-[calc(100px+env(safe-area-inset-bottom))]">
         {/* Header */}
         <div
           className="flex flex-col gap-3.5 pt-[22px] pb-4 sticky top-0 z-[5] transition-colors duration-200"
@@ -462,31 +517,55 @@ export default function App() {
             <span className="text-[19px] font-bold text-[#f2f2f2] tracking-wide">THE SOVEREIGN OS</span>
             <span className="text-[19px] text-[#f7931a] animate-tzs-blink">_</span>
           </div>
-          <div className="flex gap-1 border border-[#232323] rounded-sm p-1">
-            <button className={tabBtnClass(s.tab === 'tracker')} onClick={() => patch({ tab: 'tracker' })}>
+          <div className="flex gap-1 border border-[#232323] rounded-sm p-1" role="tablist">
+            <button role="tab" aria-selected={s.tab === 'tracker'} className={tabBtnClass(s.tab === 'tracker')} onClick={() => patch({ tab: 'tracker' })}>
               <Circle size={15} color={s.tab === 'tracker' ? '#f7931a' : '#8a8a8a'} strokeWidth={1.6} />
               TRACKER
             </button>
-            <button className={tabBtnClass(s.tab === 'reports')} onClick={() => patch({ tab: 'reports' })}>
+            <button role="tab" aria-selected={s.tab === 'reports'} className={tabBtnClass(s.tab === 'reports')} onClick={() => patch({ tab: 'reports' })}>
               <BarChart3 size={15} color={s.tab === 'reports' ? '#f7931a' : '#8a8a8a'} strokeWidth={1.8} />
               REPORTES
             </button>
-            <button className={tabBtnClass(s.tab === 'settings')} onClick={() => patch({ tab: 'settings' })}>
+            <button role="tab" aria-selected={s.tab === 'settings'} className={tabBtnClass(s.tab === 'settings')} onClick={() => patch({ tab: 'settings' })}>
               <Settings size={15} color={s.tab === 'settings' ? '#f7931a' : '#8a8a8a'} strokeWidth={1.6} />
               CONFIG
             </button>
           </div>
+
+          {/* Day progress: one segment per habit — orange done, red failed, grey pending. */}
+          {s.tab === 'tracker' && stripHabits.length > 0 && (
+            <div>
+              <div
+                className="flex gap-[3px]"
+                role="progressbar"
+                aria-label="Hábitos registrados hoy"
+                aria-valuemin={0}
+                aria-valuemax={stripHabits.length}
+                aria-valuenow={stripAnswered}
+              >
+                {stripHabits.map((h) => {
+                  const e = s.entries[h.id];
+                  const color = !isAnswered(h, e) ? '#232323' : isOk(h, e) ? '#f7931a' : '#ff3333';
+                  return <div key={h.id} className="h-1 flex-1 rounded-full transition-colors duration-300" style={{ background: color }} />;
+                })}
+              </div>
+              <div className="flex justify-between text-[10px] tracking-wide text-[#8a8a8a] mt-1.5">
+                <span>{stripAnswered}/{stripHabits.length} REGISTRADOS</span>
+                {s.dayStarted && <span style={{ color: tierColor(todayRatio) }}>{Math.round(todayRatio * 100)}% COHERENCIA</span>}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* -------------------------------------------------------------- */}
         {/* TRACKER TAB */}
         {/* -------------------------------------------------------------- */}
         {s.tab === 'tracker' && (
-          <>
+          <div className="animate-tzs-rise">
             <div className="text-[11px] text-[#8a8a8a] tracking-[1.5px] uppercase mb-4">
               AUDITORÍA // {todayLabel}
               {s.dayStarted && s.dayStartTime && (
-                <span className="text-[#6b6b6b] normal-case tracking-normal"> — iniciado a las {s.dayStartTime}</span>
+                <span className="text-[#7d7d7d] normal-case tracking-normal"> — iniciado a las {s.dayStartTime}</span>
               )}
             </div>
 
@@ -509,7 +588,7 @@ export default function App() {
                     INICIAR EL DÍA
                   </button>
                   {startBlocker && (
-                    <div className="text-[11px] text-[#ff4d4d] mt-2.5">⚠ {blockerText(startBlocker, 'INICIAR')}</div>
+                    <div className="text-[11px] text-[#ff4d4d] mt-2.5" role="alert">⚠ {blockerText(startBlocker, 'INICIAR')}</div>
                   )}
                 </div>
               </div>
@@ -539,26 +618,30 @@ export default function App() {
                 {s.closed ? 'INICIAR NUEVO DÍA' : 'CERRAR MI DÍA'}
               </button>
               {!canClose && !s.closed && (
-                <div className="text-[11px] text-[#ff4d4d] mt-2.5">⚠ {blockerText(closeBlocker, 'CONTINUAR')}</div>
+                <div className="text-[11px] text-[#ff4d4d] mt-2.5" role="alert">⚠ {blockerText(closeBlocker, 'CONTINUAR')}</div>
               )}
             </div>
             </>
             )}
-          </>
+          </div>
         )}
 
         {/* Summary modal */}
         {summaryVisible && s.summary && (
           <div
-            className="fixed inset-0 bg-black/75 flex items-center justify-center p-5 z-[100]"
+            className="fixed inset-0 bg-black/75 backdrop-blur-[2px] flex items-center justify-center p-5 z-[100] animate-tzs-fade-in"
             onClick={() => patch({ summaryDismissed: true })}
           >
             <div
-              className="bg-[#111111] border border-[#3a2a12] rounded-sm p-[26px] max-w-[400px] w-full max-h-[85vh] overflow-y-auto"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Resumen del día"
+              className="bg-[#111111] border rounded-sm p-[26px] max-w-[400px] w-full max-h-[85vh] overflow-y-auto animate-tzs-modal-in"
+              style={{ borderColor: s.summary.pct >= 70 ? '#3a2a12' : s.summary.pct < 50 ? '#3a1e1e' : '#2a2a2a' }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="text-[11px] text-[#8a8a8a] tracking-wide mb-2.5">DÍA CERRADO A LAS {s.closedTime}</div>
-              <div className="text-[44px] font-bold text-[#f7931a]">{s.summary.pct}%</div>
+              <div className="text-[44px] font-bold" style={{ color: tierColor(s.summary.pct / 100) }}>{s.summary.pct}%</div>
               <div className="text-[11px] text-[#8a8a8a] tracking-wide mb-[18px]">DE TU OBJETIVO CUMPLIDO</div>
               {s.summary.improve.length > 0 && (
                 <>
@@ -576,7 +659,8 @@ export default function App() {
               <div className="text-[14px] text-[#e5e5e5] leading-[1.6] italic mb-4">"{s.summary.quote}"</div>
               <div className="text-[13px] text-[#c9c9c9] leading-[1.65] border-t border-[#232323] pt-4">{s.summary.callout}</div>
               <button
-                className="w-full mt-[18px] p-[13px] text-[12px] font-bold tracking-[1.5px] bg-[#f7931a] text-[#0a0a0a] border-none rounded-sm cursor-pointer"
+                autoFocus
+                className="w-full mt-[18px] p-[14px] text-[12px] font-bold tracking-[1.5px] bg-[#f7931a] text-[#0a0a0a] border-none rounded-sm cursor-pointer"
                 onClick={() => patch({ summaryDismissed: true })}
               >
                 ENTENDIDO
@@ -589,11 +673,11 @@ export default function App() {
         {/* REPORTS TAB */}
         {/* -------------------------------------------------------------- */}
         {s.tab === 'reports' && (
-          <>
+          <div className="animate-tzs-rise">
             <div className="text-[11px] text-[#8a8a8a] tracking-[1.5px] uppercase mb-4">ANALÍTICAS // TIEMPO Y SOBERANÍA</div>
 
             {s.dbLoading && (
-              <div className="text-[11px] text-[#8a8a8a] tracking-wide mb-3.5">CARGANDO HISTORIAL DESDE SUPABASE…</div>
+              <div className="text-[11px] text-[#8a8a8a] tracking-wide mb-3.5 animate-tzs-pulse" role="status">CARGANDO HISTORIAL DESDE SUPABASE…</div>
             )}
             {s.dbError && (
               <div className="bg-[#160707] border border-[#ff3333] text-[#ff8080] text-[11px] leading-[1.5] rounded-sm p-[14px_16px] mb-3.5 flex justify-between items-center gap-3">
@@ -608,6 +692,10 @@ export default function App() {
               <div>
                 <div className="text-[10px] text-[#8a8a8a] tracking-wide mb-1.5">TU RANGO</div>
                 <div className="text-[22px] font-bold" style={{ color: rankColor }}>{rank}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] text-[#8a8a8a] tracking-wide mb-1.5">PROMEDIO</div>
+                <div className="text-[22px] font-bold text-[#e5e5e5]">{Math.round(yourAvg * 100)}%</div>
               </div>
             </div>
 
@@ -638,7 +726,7 @@ export default function App() {
                   <div className="text-[10px] text-[#8a8a8a] tracking-wide mb-1">TU PILAR MÁS DÉBIL</div>
                   <div className="text-[16px] font-bold text-[#ff8080]">{weakestPillar}</div>
                 </div>
-                <div className="text-[11px] text-[#6b6b6b]">{weakestCount} FALLOS</div>
+                <div className="text-[11px] text-[#7d7d7d]">{weakestCount} FALLOS</div>
               </div>
             )}
 
@@ -667,46 +755,74 @@ export default function App() {
                 <button className={viewBtnClass(s.reportView === 'monthly')} onClick={() => patch({ reportView: 'monthly', selectedPointIdx: null })}>MENSUAL</button>
                 <button className={viewBtnClass(s.reportView === 'annual')} onClick={() => patch({ reportView: 'annual', selectedPointIdx: null })}>ANUAL</button>
               </div>
-              <div className="flex gap-2">
-                <div className="flex flex-col justify-between h-[170px] pb-3.5">
-                  <span className="text-[9px] text-[#5a5a5a]">100%</span>
-                  <span className="text-[9px] text-[#5a5a5a]">50%</span>
-                  <span className="text-[9px] text-[#5a5a5a]">0%</span>
+              {n === 0 ? (
+                <div className="text-[11px] text-[#8a8a8a] leading-[1.6] border border-dashed border-[#2a2a2a] rounded-sm p-5 text-center">
+                  AÚN NO HAY DÍAS CERRADOS.<br />Cierra tu primer día para ver tu tendencia.
                 </div>
-                <div className="flex-1 relative">
-                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-[170px] block overflow-visible">
-                    <line x1="0" y1="8" x2="100" y2="8" stroke="#1c1c1c" strokeWidth="0.5" />
-                    <line x1="0" y1="52" x2="100" y2="52" stroke="#1c1c1c" strokeWidth="0.5" />
-                    <line x1="0" y1="96" x2="100" y2="96" stroke="#1c1c1c" strokeWidth="0.5" />
-                    <line x1="0" y1={worldLineY} x2="100" y2={worldLineY} stroke="#f7931a" strokeWidth="0.5" strokeDasharray="2,2" opacity="0.5" />
-                    <path d={linePath} fill="none" stroke="#f7931a" strokeWidth="1.4" vectorEffect="non-scaling-stroke" opacity="0.7" strokeLinecap="round" strokeLinejoin="round" />
+              ) : (
+              <div className="flex gap-2">
+                <div className="relative w-7 h-[170px] shrink-0" aria-hidden="true">
+                  {[['100%', 8], ['50%', 52], ['0%', 96]].map(([label, y]) => (
+                    <span key={label} className="absolute right-0 text-[9px] text-[#6f6f6f] -translate-y-1/2" style={{ top: `${y}%` }}>{label}</span>
+                  ))}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="relative h-[170px]">
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full overflow-visible" aria-hidden="true">
+                      <defs>
+                        <linearGradient id="tzs-area" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#f7931a" stopOpacity="0.28" />
+                          <stop offset="100%" stopColor="#f7931a" stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      <line x1="0" y1="8" x2="100" y2="8" stroke="#1c1c1c" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
+                      <line x1="0" y1="52" x2="100" y2="52" stroke="#1c1c1c" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
+                      <line x1="0" y1="96" x2="100" y2="96" stroke="#1c1c1c" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
+                      <line x1="0" y1={worldLineY} x2="100" y2={worldLineY} stroke="#f7931a" strokeWidth="0.5" strokeDasharray="2,2" opacity="0.5" vectorEffect="non-scaling-stroke" />
+                      {n > 1 && <path d={`${linePath} L${chartPoints[n - 1].x},96 L${chartPoints[0].x},96 Z`} fill="url(#tzs-area)" stroke="none" />}
+                      <path d={linePath} fill="none" stroke="#f7931a" strokeWidth="1.6" vectorEffect="non-scaling-stroke" opacity="0.85" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    {/* Dots are HTML, not SVG: the SVG is stretched non-uniformly, which would turn circles into ellipses. */}
                     {chartPoints.map((p) => (
-                      <g key={p.idx}>
-                        <circle
-                          cx={p.x} cy={p.y} r={4} fill="transparent"
-                          onMouseEnter={() => patch({ selectedPointIdx: p.idx })}
-                          onClick={() => patch({ selectedPointIdx: p.idx })}
-                          style={{ cursor: 'pointer' }}
+                      <button
+                        key={p.idx}
+                        type="button"
+                        aria-label={`${p.label}: ${p.pct}%`}
+                        className="absolute w-5 h-5 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center bg-transparent border-0 p-0 cursor-pointer"
+                        style={{ left: `${p.x}%`, top: `${p.y}%` }}
+                        onMouseEnter={() => patch({ selectedPointIdx: p.idx })}
+                        onFocus={() => patch({ selectedPointIdx: p.idx })}
+                        onClick={() => patch({ selectedPointIdx: p.idx })}
+                      >
+                        <span
+                          className="block rounded-full transition-all duration-150"
+                          style={{ width: p.selected ? 11 : 7, height: p.selected ? 11 : 7, background: p.color, boxShadow: '0 0 0 2px #111111' }}
                         />
-                        <circle cx={p.x} cy={p.y} r={p.dotR} fill={p.color} stroke="#0a0a0a" strokeWidth="0.6" style={{ pointerEvents: 'none' }} />
-                      </g>
+                      </button>
                     ))}
-                  </svg>
-                  {selectedPoint && (
-                    <div
-                      className="absolute -translate-x-1/2 bg-[#0a0a0a] rounded-sm px-[9px] py-[5px] text-[12px] font-bold whitespace-nowrap z-10 border pointer-events-none"
-                      style={{ left: `${selectedPoint.x}%`, top: `${(selectedPoint.y / 100) * 170}px`, transform: 'translate(-50%,-135%)', borderColor: selectedPoint.color, color: selectedPoint.color }}
-                    >
-                      {selectedPoint.label} — {selectedPoint.pct}%
-                    </div>
-                  )}
-                  <div className="flex justify-between mt-1.5">
-                    <span className="text-[9px] text-[#6b6b6b]">{trendStartLabel}</span>
+                    {selectedPoint && (
+                      <div
+                        className="absolute bg-[#0a0a0a] rounded-sm px-[9px] py-[5px] text-[12px] font-bold whitespace-nowrap z-10 border pointer-events-none"
+                        style={{
+                          left: `${selectedPoint.x}%`,
+                          top: `${selectedPoint.y}%`,
+                          transform: `translate(${selectedPoint.x < 18 ? '-12%' : selectedPoint.x > 82 ? '-88%' : '-50%'}, -150%)`,
+                          borderColor: selectedPoint.color,
+                          color: selectedPoint.color,
+                        }}
+                      >
+                        {selectedPoint.label} — {selectedPoint.pct}%
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-between mt-2">
+                    <span className="text-[9px] text-[#7d7d7d]">{trendStartLabel}</span>
                     <span className="text-[9px] text-[#f7931a] opacity-70">— — MUNDIAL {worldPct}%</span>
-                    <span className="text-[9px] text-[#6b6b6b]">{trendEndLabel}</span>
+                    <span className="text-[9px] text-[#7d7d7d]">{trendEndLabel}</span>
                   </div>
                 </div>
               </div>
+              )}
             </div>
 
             {pillarBreakdown.length > 0 && (
@@ -728,49 +844,10 @@ export default function App() {
               </div>
             )}
 
-            {dayList.length > 0 && (
-              <div className="mt-6">
-                <div className="text-[11px] text-[#8a8a8a] tracking-wide mb-3">HISTORIAL DIARIO — TOCA UN DÍA PARA VER EL DETALLE</div>
-                <div className="flex flex-col gap-2">
-                  {dayList.map((d, idx) => {
-                    return (
-                      <div
-                        key={d.key}
-                        className="bg-[#111111] border border-[#232323] rounded-sm p-[14px_16px] cursor-pointer"
-                        onClick={() => patch({ expandedIdx: s.expandedIdx === idx ? null : idx })}
-                      >
-                        <div className="flex justify-between items-center">
-                          <span className="text-[12px] text-[#c9c9c9] tracking-wide">{d.dateLabel}</span>
-                          <span className="text-[13px] font-bold" style={{ color: d.pctColor }}>{d.pctLabel}</span>
-                        </div>
-                        {d.expanded && (
-                          <div className="mt-3 border-t border-[#232323] pt-3">
-                            {d.hasFailed && (
-                              <>
-                                <div className="text-[10px] text-[#ff8080] tracking-wide mb-1.5">FALLASTE EN</div>
-                                <div className="flex flex-wrap gap-1.5" style={{ marginBottom: d.notesGap }}>
-                                  {d.failed.map((name) => (
-                                    <span key={name} className="text-[11px] text-[#ff8080] border border-[#3a1e1e] bg-[rgba(255,51,51,0.08)] px-[9px] py-[5px] rounded-sm">
-                                      {name}
-                                    </span>
-                                  ))}
-                                </div>
-                              </>
-                            )}
-                            {d.hasNotes && d.notes.map((n, i) => (
-                              <div key={i} className="text-[12px] text-[#c9c9c9] leading-[1.5] mt-1">
-                                <span className="text-[#ff8a4d]">[{n.tag}]</span> {n.text}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+            {s.dbHistory.length > 0 && (
+              <HistoryList records={s.dbHistory} onSave={updateDay} onDelete={deleteDay} onDeleteAll={deleteAllDays} />
             )}
-          </>
+          </div>
         )}
 
         {/* -------------------------------------------------------------- */}
@@ -789,7 +866,10 @@ export default function App() {
       {/* Toast */}
       {s.toast && (
         <div
-          className={`fixed left-3 right-3 top-4 max-w-[436px] mx-auto text-[13px] font-semibold leading-[1.5] p-[18px_20px] rounded-sm z-50 border ${
+          role="status"
+          aria-live="polite"
+          onClick={() => patch({ toast: null })}
+          className={`fixed left-3 right-3 top-4 max-w-[436px] mx-auto text-[13px] font-semibold leading-[1.5] p-[14px_18px] rounded-sm z-50 border cursor-pointer ${
             s.toast.tone === 'red' ? 'animate-tzs-toast-in-red' : 'animate-tzs-toast-in-green'
           }`}
           style={{
