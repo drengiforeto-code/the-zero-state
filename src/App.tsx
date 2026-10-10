@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { useAppStore } from './store';
 import { supabase, supabaseConfigError } from './lib/supabase';
 import { fetchHabits, upsertHabits } from './lib/habitsRepo';
-import { dbRowToHistoryRecord, localDateStr } from './lib/history';
+import { dbRowToHistoryRecord, logicalDateStr, longDateLabel } from './lib/history';
 import type { DiaCerradoDetalle, DiaCerradoRow } from './lib/history';
 import { sentence } from './lib/text';
 import { BLOQUES, HABIT_LAYOUT_VERSION, isAnswered, isBlocking, isOk, migrateHabitLayout, reasonText } from './habits';
@@ -17,6 +17,13 @@ import Splash from './components/Splash';
 import SummaryModal from './components/SummaryModal';
 import Toast from './components/Toast';
 import TrackerView from './components/TrackerView';
+
+// A blank tracked day (also what an old closed day is reset to).
+const NEW_DAY = {
+  dayStarted: false, dayStartTime: '', dayDate: '',
+  entries: {},
+  closed: false, closedTime: '', closedDate: '', summary: null, summaryDismissed: false,
+};
 
 const BOOT_MIN_MS = 1500;
 const BOOT_MAX_MS = 5000;
@@ -185,20 +192,43 @@ export default function App() {
     patch({
       dayStarted: true,
       dayStartTime: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      dayDate: logicalDateStr(),
     });
     showToast('Día iniciado. A partir de ahora, cada movimiento cuenta.', 'green');
     // The start block folds away; bring the rest of the day into view.
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const startNewDay = () => {
-    patch({
-      dayStarted: false, dayStartTime: '',
-      entries: {},
-      closed: false, closedTime: '', summary: null, summaryDismissed: false, tab: 'tracker',
-    });
+  // Drops an unfinished day from an earlier date (it was never closed).
+  const discardDay = () => {
+    patch({ ...NEW_DAY, tab: 'tracker' });
     showToast('Nuevo día. Responde cómo llegas y arranca.', 'green');
   };
+
+  // Day rollover: once the tracked date changes, a closed day is cleared so
+  // the tracker opens on a fresh day. Checked on load, when the app comes back
+  // to the foreground, and every minute while it's open.
+  useEffect(() => {
+    const check = () => {
+      const st = useAppStore.getState();
+      const today = logicalDateStr();
+      // State saved before days carried a date: date it from the last
+      // closed day in the history (or today) instead of guessing.
+      if (st.closed && !st.closedDate) {
+        if (st.dbLoading) return;
+        st.patch({ closedDate: st.dbHistory.at(-1)?.fecha ?? today });
+        return;
+      }
+      if (st.dayStarted && !st.dayDate) { st.patch({ dayDate: today }); return; }
+      // Leave the end-of-day summary on screen until it's dismissed.
+      if (st.closed && st.closedDate < today && (st.summaryDismissed || !st.summary)) st.patch(NEW_DAY);
+    };
+    check();
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    const id = window.setInterval(check, 60_000);
+    return () => { document.removeEventListener('visibilitychange', onVisible); window.clearInterval(id); };
+  }, [state.dbLoading, state.summaryDismissed]);
 
   // -------------------------------------------------------------------------
   // Derived values for today
@@ -219,6 +249,10 @@ export default function App() {
   const blockerText = (h: HabitDef | undefined, goal: string) =>
     !h ? '' : !isAnswered(h, s.entries[h.id]) ? `Responde «${sentence(h.nombre)}» para ${goal}.` : `Falta la razón de «${sentence(h.nombre)}».`;
   const canClose = !closeBlocker && !s.closed;
+  const today = logicalDateStr();
+  const shownDate = s.closed ? s.closedDate || today : s.dayStarted ? s.dayDate || today : today;
+  // A started day from an earlier date that was never closed.
+  const staleDay = s.dayStarted && !s.closed && !!s.dayDate && s.dayDate < today;
 
   const pillarMeta: PillarRecord[] = activeHabits.map((h) => ({ id: h.id, name: h.nombre, ok: isOk(h, s.entries[h.id]) }));
   const todayRatio = pillarMeta.length ? pillarMeta.filter((p) => p.ok).length / pillarMeta.length : 0;
@@ -231,14 +265,17 @@ export default function App() {
     state: !isAnswered(h, s.entries[h.id]) ? ('pending' as const) : isOk(h, s.entries[h.id]) ? ('ok' as const) : ('bad' as const),
   }));
 
-  const dateLabel = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }).replace(/^./, (c) => c.toUpperCase());
+  const dateLabel = longDateLabel(shownDate);
   const summaryVisible = s.closed && !!s.summary && !s.summaryDismissed;
 
-  const onCloseDay = async () => {
-    if (s.closed) { startNewDay(); return; }
-    if (!canClose) return;
-    const now = new Date();
-
+  // Writes the day to the history (insert, or update if it was saved before).
+  // The date is the day it was started for, so closing late never lands on
+  // the next day.
+  const persistDay = async (): Promise<boolean> => {
+    if (!supabase) {
+      showToast('Supabase no está configurado: ' + supabaseConfigError, 'red');
+      return false;
+    }
     const detalle: DiaCerradoDetalle = {
       habitos_logrados: pillarMeta.filter((p) => p.ok).map((p) => p.name),
       vectores_ataque: failedPillars.map((p) => ({ pilar: p.name, razon: reasonText(s.entries[p.id]) })),
@@ -249,6 +286,21 @@ export default function App() {
       respuestas: s.entries,
       horaInicio: s.dayStartTime || undefined,
     };
+    const { error } = await supabase.from('dias_cerrados').upsert({
+      fecha: s.closedDate || s.dayDate || today,
+      score_coherencia: Math.round(todayRatio * 100),
+      detalle,
+    }, { onConflict: 'fecha' });
+    if (error) {
+      showToast('No se pudo guardar en Supabase: ' + error.message, 'red');
+      return false;
+    }
+    return true;
+  };
+
+  const onCloseDay = async () => {
+    if (!canClose) return;
+    const now = new Date();
 
     const quoteId = failedPillars.length ? failedPillars[0].id : 'perfect';
     const summary: SummaryState = {
@@ -260,35 +312,28 @@ export default function App() {
         : successCallouts[Math.floor(Math.random() * successCallouts.length)],
     };
 
-    if (!supabase) {
-      showToast('Supabase no está configurado: ' + supabaseConfigError, 'red');
-      return;
-    }
-
-    // Persist to Supabase before touching local state — if this fails, the
-    // board must NOT be marked closed/cleared, so nothing is lost.
-    // Upsert on `fecha`: closing "today" twice (re-closing after starting a
-    // new day within the same calendar date, or retrying) amends today's
-    // row instead of hitting the unique constraint.
-    const { error } = await supabase.from('dias_cerrados').upsert({
-      fecha: localDateStr(now),
-      score_coherencia: Math.round(todayRatio * 100),
-      detalle,
-    }, { onConflict: 'fecha' });
-
-    if (error) {
-      showToast('No se pudo guardar en Supabase: ' + error.message, 'red');
-      return;
-    }
+    // Persist before touching local state — if this fails the day must NOT
+    // be marked closed, so nothing is lost.
+    if (!(await persistDay())) return;
 
     patch({
       closed: true,
       closedTime: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      closedDate: s.dayDate || today,
       summary,
       summaryDismissed: false,
     });
     showToast('Día cerrado. La auditoría de hoy queda registrada en tu historial real.', 'green');
     fetchHistory();
+  };
+
+  // Saves corrections made to a day that's already closed.
+  const saveClosedDay = async (): Promise<boolean> => {
+    if (closeBlocker) { showToast(blockerText(closeBlocker, 'guardar'), 'red'); return false; }
+    if (!(await persistDay())) return false;
+    showToast('Cambios guardados en tu historial.', 'green');
+    fetchHistory();
+    return true;
   };
 
   // -------------------------------------------------------------------------
@@ -309,6 +354,8 @@ export default function App() {
             dayStarted={s.dayStarted}
             dayStartTime={s.dayStartTime}
             closed={s.closed}
+            closedTime={s.closedTime}
+            staleDayLabel={staleDay ? longDateLabel(s.dayDate) : ''}
             habits={activeHabits}
             entries={s.entries}
             habitNumber={habitNumber}
@@ -317,6 +364,9 @@ export default function App() {
             canClose={canClose}
             onStart={startDay}
             onClose={onCloseDay}
+            onSaveClosed={saveClosedDay}
+            onSetEntries={(entries) => patch({ entries })}
+            onDiscardDay={discardDay}
             onChangeEntry={setEntry}
             onFeedback={onFeedback}
           />
