@@ -14,9 +14,9 @@ export default function Toast({ toast, onDismiss }: { toast: ToastState; onDismi
         aria-live="polite"
         onClick={onDismiss}
         className="anim-toast pointer-events-auto flex w-full max-w-[420px] cursor-pointer items-start gap-3 rounded-card border bg-surface px-4 py-3 text-left text-[13px] leading-5 text-fg shadow-[0_12px_32px_-12px_rgba(0,0,0,0.7)]"
-        style={{ borderColor: red ? 'var(--color-danger-line)' : 'var(--color-accent-line)' }}
+        style={{ borderColor: red ? 'var(--color-danger-line)' : 'var(--color-good-line)' }}
       >
-        <Icon size={18} className="mt-px shrink-0" style={{ color: red ? 'var(--color-danger)' : 'var(--color-accent)' }} aria-hidden="true" />
+        <Icon size={18} className="mt-px shrink-0" style={{ color: red ? 'var(--color-danger)' : 'var(--color-good)' }} aria-hidden="true" />
         <span className="min-w-0 flex-1">{toast.message}</span>
       </button>
     </div>

@@ -53,7 +53,7 @@ function StartSummary({
   return (
     <section className="card overflow-hidden p-0" aria-label={title}>
       <div className="flex items-start gap-3 px-4 pb-3.5 pt-4 sm:px-5">
-        <CircleCheck size={20} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
+        <CircleCheck size={20} className="mt-0.5 shrink-0 text-good" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <h2 className="section-title">{title}</h2>
           <p className="help mt-0.5">
@@ -94,7 +94,7 @@ function TodayPanel({ habits, entries, closed }: { habits: HabitDef[]; entries: 
   const ratio = habits.length ? ok / habits.length : 0;
   const color = tierColor(ratio);
   const rows = [
-    { label: 'Cumplidos', value: ok, color: 'var(--color-accent)' },
+    { label: 'Cumplidos', value: ok, color: 'var(--color-good)' },
     { label: 'Fallados', value: bad, color: 'var(--color-danger)' },
     { label: 'Pendientes', value: pending, color: 'var(--color-line-strong)' },
   ];
@@ -358,7 +358,7 @@ export default function TrackerView({
         {staleDayLabel && (
           <div className="alert flex-col sm:flex-row sm:items-center" role="status">
             <div className="flex min-w-0 flex-1 items-start gap-3">
-              <CircleAlert size={18} className="mt-px shrink-0 text-accent" aria-hidden="true" />
+              <CircleAlert size={18} className="mt-px shrink-0 text-fg-2" aria-hidden="true" />
               <div className="min-w-0">
                 <p className="m-0 font-medium text-fg">Este día empezó el {staleDayLabel.toLowerCase()}</p>
                 <p className="m-0 mt-0.5 text-[12px] text-fg-3">
@@ -416,7 +416,7 @@ export default function TrackerView({
         )}
         {dayStarted && inicio.length === 0 && (
           <div className="card flex items-center gap-3 px-4 py-3.5">
-            <CircleCheck size={18} className="shrink-0 text-accent" aria-hidden="true" />
+            <CircleCheck size={18} className="shrink-0 text-good" aria-hidden="true" />
             <p className="m-0 text-[13px] text-fg-2">Día iniciado{dayStartTime && <span className="text-fg-3"> · {dayStartTime}</span>}</p>
           </div>
         )}

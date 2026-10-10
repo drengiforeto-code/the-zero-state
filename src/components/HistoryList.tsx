@@ -140,7 +140,7 @@ export default function HistoryList({
                         <ul className={`m-0 flex list-none flex-col gap-1.5 p-0 ${failed.length > 0 ? 'mt-4' : ''}`}>
                           {r.notes.map((n, i) => (
                             <li key={i} className="text-[13px] leading-5 text-fg-2">
-                              <span className="font-medium text-accent">{sentence(n.tag)}</span> · {n.text}
+                              <span className="font-medium text-fg">{sentence(n.tag)}</span> · {n.text}
                             </li>
                           ))}
                         </ul>
@@ -163,7 +163,7 @@ export default function HistoryList({
                       ) : (
                         <div className="mt-4 flex gap-2">
                           {r.pillars.length > 0 && (
-                            <button type="button" className="btn btn-accent btn-sm" onClick={() => setEditing({ fecha: r.fecha, pillars: r.pillars.map((p) => ({ ...p })) })}>
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing({ fecha: r.fecha, pillars: r.pillars.map((p) => ({ ...p })) })}>
                               <Pencil size={13} aria-hidden="true" />
                               Editar
                             </button>

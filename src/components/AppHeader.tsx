@@ -15,7 +15,7 @@ const TABS: { id: Tab; label: string; short: string; icon: typeof ListChecks }[]
   { id: 'settings', label: 'Configuración', short: 'Ajustes', icon: Settings },
 ];
 
-const SEGMENT_COLOR = { ok: 'var(--color-accent)', bad: 'var(--color-danger)', pending: 'var(--color-line-strong)' };
+const SEGMENT_COLOR = { ok: 'var(--color-good)', bad: 'var(--color-danger)', pending: 'var(--color-line-strong)' };
 
 // Navigation: tabs on top from 640px up; on phones a native-style bottom bar.
 // The day-progress strip stays pinned to the top on the tracker.

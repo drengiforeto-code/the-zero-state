@@ -60,4 +60,11 @@ export const TIME_PUNCHES = [
   'Tus excusas no detienen el calendario.',
   'Lo efímero te cobra en lo importante.',
   'Si hoy no avanzas, retrocedes: el tiempo no se queda quieto.',
+  // Mentalidad de campeón.
+  'Los campeones no esperan a tener ganas. Entrenan igual.',
+  'Nadie te regaló nada. Nadie te lo va a regalar. A trabajar.',
+  'La disciplina de hoy es lo que se ve en diciembre.',
+  'Hazlo cuando duele. Ahí es donde se gana.',
+  'El que quiere resultados encuentra la forma. El que no, la excusa.',
+  'No se trata de motivación. Se trata de cumplir lo que dijiste.',
 ];
