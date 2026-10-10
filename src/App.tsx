@@ -55,8 +55,14 @@ export default function App() {
   // first run: seed it with whatever this device has (defaults + old extras).
   const loadHabits = async () => {
     const { habits, error } = await fetchHabits();
-    if (error || !habits) { patch({ habitsError: error }); return; }
     const layout = useAppStore.getState().habitLayout;
+    if (error || !habits) {
+      // Supabase unreachable (or the habitos table is missing): still apply
+      // pending layout changes to this device's copy so the tracker updates.
+      const local = migrateHabitLayout(useAppStore.getState().habits, layout);
+      patch({ habits: local.habits, habitLayout: HABIT_LAYOUT_VERSION, habitsError: error });
+      return;
+    }
     if (habits.length === 0) {
       const seed = migrateHabitLayout(useAppStore.getState().habits, layout).habits;
       const seedError = await upsertHabits(seed);
