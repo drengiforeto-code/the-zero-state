@@ -55,7 +55,7 @@ export default function HistoryList({
   return (
     <div className="card overflow-hidden p-0">
       <div className="px-5 pb-3 pt-5 max-[480px]:px-4 max-[480px]:pt-4">
-        <h2 className="section-title">📜 Historial diario</h2>
+        <h2 className="section-title">Historial diario</h2>
         <p className="help mt-0.5">Toca un día para ver el detalle, editarlo o borrarlo.</p>
       </div>
 

@@ -1,7 +1,7 @@
 import { BarChart3, ListChecks, Settings } from 'lucide-react';
 import { APP_NAME } from '../content';
 import type { Tab } from '../store';
-import { tabClass, tierColor, tierEmoji } from '../ui';
+import { tabClass, tierColor } from '../ui';
 import Logo from './Logo';
 
 export interface ProgressSegment {
@@ -56,10 +56,10 @@ export default function AppHeader({
           {showStrip && (
             <div className="pb-3 pt-3 sm:pt-1">
               <div className="mb-2 flex items-center justify-between text-[12px] text-fg-3">
-                <span className="tabular-nums">📝 {answered} de {segments.length} registrados</span>
+                <span className="tabular-nums">{answered} de {segments.length} registrados</span>
                 {coherence !== null && (
                   <span className="font-medium tabular-nums" style={{ color: tierColor(coherence) }}>
-                    {tierEmoji(coherence)} {Math.round(coherence * 100)}% de coherencia
+                    {Math.round(coherence * 100)}% de coherencia
                   </span>
                 )}
               </div>

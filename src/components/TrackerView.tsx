@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Check, CircleAlert, CircleCheck, History, Lock, Pencil, Play, X } from 'lucide-react';
-import { BLOQUES, blockOf, emojiFor, isAnswered, isOk } from '../habits';
-import type { CSSProperties } from 'react';
+import { BLOQUES, blockOf, isAnswered, isOk } from '../habits';
+import { BLOCK_ICON, habitIcon } from '../icons';
 import type { HabitDef, HabitEntry } from '../habits';
 import { sentence } from '../lib/text';
-import { tierColor, tierEmoji } from '../ui';
+import { tierColor } from '../ui';
 import HabitCard from './HabitCard';
 import TimeReality from './TimeReality';
 import Ring from './Ring';
@@ -13,7 +13,7 @@ function SectionHeader({ block, title, hint, progress }: { block: ReturnType<typ
   return (
     <div className="mb-3 flex items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="emoji-tile emoji-tile-sm" style={{ '--tile': block.color } as CSSProperties} aria-hidden="true">{block.emoji}</span>
+        <span className="icon-tile icon-tile-sm" aria-hidden="true">{(() => { const I = BLOCK_ICON[block.id]; return <I size={17} strokeWidth={1.8} />; })()}</span>
         <div className="min-w-0">
           <h2 className="section-title">{title ?? block.label}</h2>
           {(hint ?? block.hint) && <p className="help mt-0.5">{hint ?? block.hint}</p>}
@@ -21,7 +21,7 @@ function SectionHeader({ block, title, hint, progress }: { block: ReturnType<typ
       </div>
       {progress && (
         <span className={`badge shrink-0 tabular-nums ${progress.done === progress.total ? 'badge-ok' : ''}`}>
-          {progress.done === progress.total ? '🎉 ' : ''}{progress.done}/{progress.total}
+          {progress.done}/{progress.total}
         </span>
       )}
     </div>
@@ -57,7 +57,7 @@ function StartSummary({
   return (
     <section className="card overflow-hidden p-0" aria-label={title}>
       <div className="flex items-start gap-3 px-4 pb-3.5 pt-4 sm:px-5">
-        <span className="emoji-tile emoji-tile-sm" style={{ '--tile': blockOf('inicio').color } as CSSProperties} aria-hidden="true">{blockOf('inicio').emoji}</span>
+        <span className="icon-tile icon-tile-sm" aria-hidden="true"><BLOCK_ICON.inicio size={17} strokeWidth={1.8} /></span>
         <div className="min-w-0 flex-1">
           <h2 className="section-title">{title}</h2>
           <p className="help mt-0.5">
@@ -75,7 +75,7 @@ function StartSummary({
         <ul className="m-0 flex list-none flex-wrap gap-2 px-4 pb-4 sm:px-5">
           {states.map(({ h, state }) => (
             <li key={h.id} className={`badge h-8 px-3 text-[12px] ${state === 'ok' ? 'badge-ok' : state === 'bad' ? 'badge-danger' : ''}`}>
-              <span aria-hidden="true">{emojiFor(h)}</span>
+              {(() => { const I = habitIcon(h); return <I size={13} strokeWidth={2} aria-hidden="true" />; })()}
               {state === 'ok' && <Check size={12} strokeWidth={3} aria-hidden="true" />}
               {state === 'bad' && <X size={12} strokeWidth={3} aria-hidden="true" />}
               {sentence(h.nombre)}
@@ -99,9 +99,9 @@ function TodayPanel({ habits, entries, closed }: { habits: HabitDef[]; entries: 
   const ratio = habits.length ? ok / habits.length : 0;
   const color = tierColor(ratio);
   const rows = [
-    { label: '✅ Cumplidos', value: ok, color: 'var(--color-good)' },
-    { label: '❌ Fallados', value: bad, color: 'var(--color-danger)' },
-    { label: '⏳ Pendientes', value: pending, color: 'var(--color-amber)' },
+    { label: 'Cumplidos', value: ok, color: 'var(--color-good)' },
+    { label: 'Fallados', value: bad, color: 'var(--color-danger)' },
+    { label: 'Pendientes', value: pending, color: 'var(--color-line-strong)' },
   ];
 
   return (
@@ -112,7 +112,7 @@ function TodayPanel({ habits, entries, closed }: { habits: HabitDef[]; entries: 
       </Ring>
       <div className="min-w-0 flex-1">
         <p className="m-0 text-[17px] font-bold leading-6 tracking-tight text-fg">
-          {answered === 0 ? '✨ Empieza con el primero' : ratio >= 0.7 ? '👑 Modo soberano' : ratio >= 0.5 ? '⚡ Vas a medias' : '🚨 Te están ganando'}
+          {answered === 0 ? 'Empieza con el primero' : ratio >= 0.7 ? 'Modo soberano' : ratio >= 0.5 ? 'Vas a medias' : 'Te están ganando'}
         </p>
         <p className="help m-0">
           {closed ? 'Día cerrado' : pending === 0 ? 'Todo registrado' : `${answered} de ${habits.length} registrados`}
@@ -120,7 +120,8 @@ function TodayPanel({ habits, entries, closed }: { habits: HabitDef[]; entries: 
         <ul className="m-0 mt-3 flex max-w-[300px] list-none flex-col gap-2 p-0">
           {rows.map((r) => (
             <li key={r.label} className="flex items-center justify-between gap-3 text-[13px]">
-              <span className="flex items-center gap-2 text-fg-2">
+              <span className="flex items-center gap-2 text-fg-3">
+                <span className="size-2 rounded-full" style={{ background: r.color }} aria-hidden="true" />
                 {r.label}
               </span>
               <span className="font-semibold tabular-nums text-fg">{r.value}</span>
@@ -154,7 +155,7 @@ function ClosedPanel({ habits, entries, dayStartTime, closedTime }: { habits: Ha
         <div className="min-w-0 flex-1">
           <span className="badge badge-ok h-7 px-3 text-[12px]">
             <Lock size={12} aria-hidden="true" />
-            {tierEmoji(ratio)} Día cerrado
+            Día cerrado
           </span>
           <dl className="m-0 mt-3 flex max-w-[300px] flex-col gap-2">
             {rows.map((r) => (
@@ -404,17 +405,17 @@ export default function TrackerView({
         {!dayStarted && (
           <div className="hero flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <h2 className="section-title">🚀 Iniciar el día</h2>
+              <h2 className="section-title">Iniciar el día</h2>
               {startHint ? (
                 <p className="m-0 mt-1 flex items-start gap-1.5 text-[12px] leading-[18px] text-danger-fg">
                   <CircleAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
                   {startHint}
                 </p>
               ) : (
-                <p className="help mt-1">Todo listo. Desde aquí, cada movimiento cuenta. 💥</p>
+                <p className="help mt-1">Todo listo. Desde aquí, cada movimiento cuenta.</p>
               )}
             </div>
-            <button type="button" className={`btn btn-primary btn-lg w-full sm:w-auto ${startHint ? '' : 'anim-glow'}`} disabled={!!startHint} onClick={onStart}>
+            <button type="button" className={`btn btn-primary btn-lg w-full sm:w-auto `} disabled={!!startHint} onClick={onStart}>
               <Play size={16} fill="currentColor" aria-hidden="true" />
               Iniciar el día
             </button>
@@ -423,7 +424,7 @@ export default function TrackerView({
         {dayStarted && inicio.length === 0 && (
           <div className="card flex items-center gap-3 px-4 py-3.5">
             <CircleCheck size={18} className="shrink-0 text-good" aria-hidden="true" />
-            <p className="m-0 text-[13px] text-fg-2">🚀 Día iniciado{dayStartTime && <span className="text-fg-3"> · {dayStartTime}</span>}</p>
+            <p className="m-0 text-[13px] text-fg-2">Día iniciado{dayStartTime && <span className="text-fg-3"> · {dayStartTime}</span>}</p>
           </div>
         )}
 
@@ -447,11 +448,11 @@ export default function TrackerView({
         {dayStarted && (
           <div className="hero flex flex-col gap-4">
             <div>
-              <h2 className="section-title">🌙 Cerrar mi día</h2>
+              <h2 className="section-title">Cerrar mi día</h2>
               <p className="help mt-1">Tus respuestas se guardan solas en este dispositivo. Al cerrar el día se registran en el historial.</p>
             </div>
             <button type="button" className="btn btn-primary btn-lg w-full" disabled={!canClose} onClick={onClose}>
-              🏁 Cerrar mi día
+              Cerrar mi día
             </button>
             {!canClose && closeHint && (
               <p className="m-0 flex items-start gap-1.5 text-[12px] leading-[18px] text-danger-fg">

@@ -1,33 +1,32 @@
 @import "tailwindcss";
 
 /* ==========================================================================
-   Design tokens. Vivid night-indigo palette with a violet→pink brand
-   gradient; green/red keep their meaning (done well / failed).
-   Radius scale: control 12px · card 18px · modal 22px · pill for chips/badges.
+   Design tokens. Deep-navy palette with a cyan→azure brand gradient; green/red keep their meaning (done well / failed).
+   Radius scale: control 10px · card 14px · modal 18px · pill for chips/badges.
    ========================================================================== */
 @theme {
   --font-sans: 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
-  /* Night-indigo surfaces: dark, but with colour in them. */
-  --color-bg: #0c0a1f;
-  --color-surface: #15122e;
-  --color-sunken: #100e26;
-  --color-raised: #1f1b42;
-  --color-line: #2b2759;
-  --color-line-strong: #3a3573;
+  /* Deep-navy surfaces. */
+  --color-bg: #070c16;
+  --color-surface: #0d1626;
+  --color-sunken: #0a111e;
+  --color-raised: #15223a;
+  --color-line: #1d2d4a;
+  --color-line-strong: #2a4068;
 
-  --color-fg: #f6f4ff;
-  --color-fg-2: #d2cdf3;
-  --color-fg-3: #a29dd0;
+  --color-fg: #f1f6ff;
+  --color-fg-2: #cddaf0;
+  --color-fg-3: #8fa4c6;
 
-  /* Brand: electric violet → hot pink. Actions, navigation, focus. */
-  --color-primary: #a78bfa;
-  --color-primary-hover: #c4b5fd;
-  --color-primary-strong: #7c3aed;
-  --color-pink: #f472b6;
+  /* Brand: azure → cyan. Actions, navigation, focus. */
+  --color-primary: #38bdf8;
+  --color-primary-hover: #7dd3fc;
+  --color-primary-strong: #0284c7;
+  --color-pink: #38d0ff; /* bright cyan accent (name kept for existing utilities) */
   --color-amber: #fbbf24;
   --color-cyan: #22d3ee;
-  --grad-primary: linear-gradient(135deg, #7c3aed 0%, #c026d3 55%, #ec4899 100%);
+  --grad-primary: linear-gradient(135deg, #0a9bff 0%, #38d0ff 100%);
   --grad-good: linear-gradient(135deg, #10b981 0%, #22c55e 100%);
   --grad-bad: linear-gradient(135deg, #ef4444 0%, #f43f5e 100%);
 
@@ -42,9 +41,9 @@
   --color-danger-soft: rgba(244, 63, 94, 0.14);
   --color-danger-line: #5b2140;
 
-  --radius-control: 12px;
-  --radius-card: 18px;
-  --radius-modal: 22px;
+  --radius-control: 10px;
+  --radius-card: 14px;
+  --radius-modal: 18px;
 }
 
 /* ==========================================================================
@@ -67,16 +66,15 @@ body {
 }
 
 ::selection {
-  background: var(--color-primary-strong);
-  color: #fff;
+  background: var(--color-primary);
+  color: #04182c;
 }
 
 /* App backdrop: soft colour glows over the night base. */
 .app-bg {
   background:
-    radial-gradient(900px 480px at 8% -8%, rgba(124, 58, 237, 0.30), transparent 60%),
-    radial-gradient(760px 420px at 100% 4%, rgba(236, 72, 153, 0.20), transparent 60%),
-    radial-gradient(700px 500px at 50% 112%, rgba(34, 211, 238, 0.12), transparent 60%),
+    radial-gradient(900px 480px at 8% -8%, rgba(14, 165, 255, 0.26), transparent 60%),
+    
     var(--page-bg);
   background-repeat: no-repeat;
 }
@@ -109,11 +107,10 @@ button {
 @layer components {
   /* ---- Surfaces & text -------------------------------------------------- */
   .card {
-    background: linear-gradient(160deg, rgba(34, 29, 74, 0.92) 0%, rgba(21, 18, 46, 0.96) 100%);
+    background: var(--color-surface);
     border: 1px solid var(--color-line);
     border-radius: var(--radius-card);
     padding: 20px;
-    box-shadow: 0 6px 24px -12px rgba(0, 0, 0, 0.6);
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
   }
   @media (max-width: 480px) {
@@ -206,16 +203,16 @@ button {
   }
   .input::placeholder,
   .textarea::placeholder {
-    color: #7d78ad;
+    color: #6b82a8;
   }
   .input:hover,
   .textarea:hover {
-    border-color: #5047a3;
+    border-color: #3c5a94;
   }
   .input:focus,
   .textarea:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.25);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.28);
   }
 
   /* ---- Buttons ---------------------------------------------------------- */
@@ -247,11 +244,11 @@ button {
     font-size: 12px;
   }
   .btn-lg {
-    height: 54px;
+    height: 52px;
     padding: 0 28px;
     font-size: 15px;
     font-weight: 700;
-    border-radius: 16px;
+    border-radius: 12px;
   }
   .btn-icon {
     width: 32px;
@@ -260,18 +257,18 @@ button {
 
   .btn-primary {
     background: var(--grad-primary);
-    color: #fff;
+    color: #04182c;
     font-weight: 700;
-    box-shadow: 0 8px 22px -8px rgba(192, 38, 211, 0.65);
+    box-shadow: 0 8px 22px -8px rgba(14, 165, 255, 0.55);
   }
   .btn-primary:hover:not(:disabled) {
     filter: brightness(1.12);
-    box-shadow: 0 10px 28px -8px rgba(192, 38, 211, 0.85);
+    box-shadow: 0 10px 28px -8px rgba(56, 208, 255, 0.75);
   }
   .btn-primary:disabled {
     background: var(--color-raised);
     border-color: var(--color-line);
-    color: #7d78ad;
+    color: #6b82a8;
     box-shadow: none;
   }
 
@@ -282,7 +279,7 @@ button {
   }
   .btn-secondary:hover:not(:disabled) {
     background: var(--color-raised);
-    border-color: #5047a3;
+    border-color: #3c5a94;
     color: var(--color-fg);
   }
   .btn-secondary:disabled {
@@ -344,7 +341,7 @@ button {
     transform: scale(0.98);
   }
   .choice:hover {
-    border-color: #5047a3;
+    border-color: #3c5a94;
     color: var(--color-fg);
   }
   .choice-sm {
@@ -394,7 +391,7 @@ button {
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
   .chip:hover {
-    border-color: #5047a3;
+    border-color: #3c5a94;
     color: var(--color-fg);
   }
   .chip-on,
@@ -457,9 +454,9 @@ button {
   .seg-item-on,
   .seg-item-on:hover {
     background: var(--grad-primary);
-    color: #fff;
-    font-weight: 600;
-    box-shadow: 0 4px 14px -6px rgba(192, 38, 211, 0.7);
+    color: #04182c;
+    font-weight: 700;
+    box-shadow: 0 4px 14px -6px rgba(14, 165, 255, 0.6);
   }
 
   .tabs {
@@ -540,39 +537,39 @@ button {
   .bottom-tab-on {
     color: var(--color-fg);
     font-weight: 600;
-    background: rgba(124, 58, 237, 0.20);
+    background: rgba(14, 165, 255, 0.16);
   }
   .bottom-tab-on svg {
     color: var(--color-pink);
   }
 
   /* ---- Emoji tiles & block banners -------------------------------------- */
-  .emoji-tile {
+  .icon-tile {
     position: relative;
     display: grid;
     flex: none;
     place-items: center;
     width: 44px;
     height: 44px;
-    border-radius: 14px;
+    border-radius: 12px;
     font-size: 23px;
     line-height: 1;
-    background: linear-gradient(145deg, color-mix(in srgb, var(--tile, #7c3aed) 38%, transparent), color-mix(in srgb, var(--tile, #7c3aed) 14%, transparent));
-    border: 1px solid color-mix(in srgb, var(--tile, #7c3aed) 55%, transparent);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--tile, #0284c7) 38%, transparent), color-mix(in srgb, var(--tile, #0284c7) 14%, transparent));
+    border: 1px solid color-mix(in srgb, var(--tile, #0284c7) 55%, transparent);
   }
-  .emoji-tile-sm {
+  .icon-tile-sm {
     width: 34px;
     height: 34px;
-    border-radius: 11px;
+    border-radius: 10px;
     font-size: 18px;
   }
-  .emoji-tile-lg {
+  .icon-tile-lg {
     width: 52px;
     height: 52px;
     border-radius: 16px;
     font-size: 27px;
   }
-  .emoji-mark {
+  .icon-mark {
     position: absolute;
     right: -5px;
     bottom: -5px;
@@ -588,12 +585,12 @@ button {
   .hero {
     position: relative;
     overflow: hidden;
-    border: 1px solid rgba(167, 139, 250, 0.35);
+    border: 1px solid rgba(56, 189, 248, 0.32);
     border-radius: var(--radius-card);
     padding: 22px;
     background:
-      radial-gradient(420px 220px at 0% 0%, rgba(124, 58, 237, 0.45), transparent 70%),
-      radial-gradient(380px 220px at 100% 100%, rgba(236, 72, 153, 0.35), transparent 70%),
+      radial-gradient(420px 220px at 0% 0%, rgba(14, 165, 255, 0.32), transparent 70%),
+      radial-gradient(380px 220px at 100% 100%, rgba(56, 208, 255, 0.14), transparent 70%),
       var(--color-surface);
   }
 
@@ -683,12 +680,7 @@ button {
   60% { transform: scale(1.18); opacity: 1; }
   100% { transform: scale(1); }
 }
-@keyframes glow {
-  0%, 100% { box-shadow: 0 8px 22px -8px rgba(192, 38, 211, 0.55); }
-  50% { box-shadow: 0 10px 34px -6px rgba(236, 72, 153, 0.95); }
-}
 .anim-pop { animation: pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4) both; }
-.anim-glow { animation: glow 2.2s ease-in-out infinite; }
 
 .anim-fade { animation: fade-in 0.18s ease; }
 .anim-rise { animation: rise-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
