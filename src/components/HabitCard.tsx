@@ -1,5 +1,5 @@
-import { useId } from 'react';
-import { Check, X } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
+import { Check, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { emptyEntry, isChecklist, isFailed, isOk } from '../habits';
 import type { HabitDef, HabitEntry, SubStatus } from '../habits';
 import { sentence } from '../lib/text';
@@ -8,6 +8,10 @@ import { choiceClass, chipClass } from '../ui';
 // One card per habit, rendered entirely from its definition: answer options
 // (any number, each flagged as fulfilling or not) or a subtask checklist,
 // plus the failure-reason picker and an optional note.
+//
+// A fulfilled habit folds into a one-line row so the screen shows what's
+// still pending; tapping the row opens it again. Failed habits stay open —
+// they're what needs attention (and the reason picker lives there).
 export default function HabitCard({
   habit,
   number,
@@ -27,6 +31,15 @@ export default function HabitCard({
   const showReasons = failed && !isChecklist(habit);
   const name = sentence(habit.nombre);
 
+  const [collapsed, setCollapsed] = useState(ok);
+  useEffect(() => {
+    if (!ok) { setCollapsed(false); return; }
+    // Habits with a note stay open after answering so the note can be typed.
+    if (habit.conNota) return;
+    const t = window.setTimeout(() => setCollapsed(true), 450);
+    return () => window.clearTimeout(t);
+  }, [ok, habit.conNota]);
+
   const pickOption = (id: string) => {
     const opt = habit.opciones.find((o) => o.id === id);
     if (!opt) return;
@@ -44,6 +57,32 @@ export default function HabitCard({
 
   const toggleReason = (label: string) =>
     onChange({ ...entry, razones: entry.razones.includes(label) ? entry.razones.filter((x) => x !== label) : [...entry.razones, label] });
+
+  if (ok && collapsed) {
+    const answer = isChecklist(habit)
+      ? `${habit.subtareas.length}/${habit.subtareas.length}`
+      : sentence(habit.opciones.find((o) => o.id === entry.opcion)?.label ?? '');
+    return (
+      <section className="card anim-fade p-0" style={{ borderColor: 'var(--color-accent-line)' }} aria-label={name}>
+        <button
+          type="button"
+          className="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 py-3 text-left text-inherit sm:px-5"
+          aria-expanded={false}
+          onClick={() => setCollapsed(false)}
+        >
+          <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-bg" role="img" aria-label="Cumplido">
+            <Check size={13} strokeWidth={3} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14px] font-medium text-fg">{name}</span>
+            {entry.nota.trim() && <span className="block truncate text-[12px] text-fg-3">{entry.nota.trim()}</span>}
+          </span>
+          <span className="max-w-[45%] shrink-0 truncate text-[13px] text-accent">{answer}</span>
+          <ChevronDown size={16} className="shrink-0 text-fg-3" aria-hidden="true" />
+        </button>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -70,6 +109,11 @@ export default function HabitCard({
           {habit.pregunta && <p className="m-0 mt-0.5 text-[13px] leading-5 text-fg-2">{sentence(habit.pregunta)}</p>}
           {habit.porQue && <p className="help mt-1.5">Por qué: {habit.porQue}</p>}
         </div>
+        {ok && (
+          <button type="button" className="btn btn-secondary btn-sm btn-icon -mr-1 -mt-1 shrink-0" aria-label="Contraer" onClick={() => setCollapsed(true)}>
+            <ChevronUp size={16} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       <div className="mt-4">

@@ -456,6 +456,49 @@ button {
     background: var(--color-accent);
   }
 
+  /* Phone navigation: fixed bottom bar, like a native app. */
+  .bottom-nav {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 20;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    background: var(--page-bg, var(--color-bg));
+    border-top: 1px solid var(--color-line);
+  }
+  .bottom-tab {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 52px;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-control);
+    color: var(--color-fg-3);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  .bottom-tab-on {
+    color: var(--color-accent);
+  }
+  .bottom-tab-on::before {
+    content: '';
+    position: absolute;
+    top: -7px;
+    left: 50%;
+    width: 28px;
+    height: 2px;
+    margin-left: -14px;
+    border-radius: 0 0 2px 2px;
+    background: var(--color-accent);
+  }
+
   /* ---- Feedback --------------------------------------------------------- */
   .alert {
     display: flex;

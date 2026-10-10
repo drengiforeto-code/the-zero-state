@@ -3,7 +3,9 @@ import { Check, CircleAlert, CircleCheck, Lock, Pencil, Play, X } from 'lucide-r
 import { BLOQUES, isAnswered, isOk } from '../habits';
 import type { HabitDef, HabitEntry } from '../habits';
 import { sentence } from '../lib/text';
+import { tierColor } from '../ui';
 import HabitCard from './HabitCard';
+import Ring from './Ring';
 
 function SectionHeader({ title, hint, progress }: { title: string; hint?: string; progress?: { done: number; total: number } }) {
   return (
@@ -82,6 +84,46 @@ function StartSummary({
   );
 }
 
+// Today at a glance: coherence ring + what's done, failed and pending.
+function TodayPanel({ habits, entries, closed }: { habits: HabitDef[]; entries: Record<string, HabitEntry>; closed: boolean }) {
+  const ok = habits.filter((h) => isOk(h, entries[h.id])).length;
+  const answered = habits.filter((h) => isAnswered(h, entries[h.id])).length;
+  const bad = answered - ok;
+  const pending = habits.length - answered;
+  const ratio = habits.length ? ok / habits.length : 0;
+  const color = tierColor(ratio);
+  const rows = [
+    { label: 'Cumplidos', value: ok, color: 'var(--color-accent)' },
+    { label: 'Fallados', value: bad, color: 'var(--color-danger)' },
+    { label: 'Pendientes', value: pending, color: 'var(--color-line-strong)' },
+  ];
+
+  return (
+    <section className="card flex items-center gap-5 sm:gap-7" aria-label="Resumen de hoy">
+      <Ring value={ratio} size={104} stroke={8} color={color} label={`Coherencia de hoy: ${Math.round(ratio * 100)}%`}>
+        <span className="text-[26px] font-semibold leading-none tracking-tight tabular-nums" style={{ color }}>{Math.round(ratio * 100)}%</span>
+        <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.08em] text-fg-3">Coherencia</span>
+      </Ring>
+      <div className="min-w-0 flex-1">
+        <p className="m-0 text-[13px] text-fg-2">
+          {closed ? 'Día cerrado' : pending === 0 ? 'Todo registrado' : `${answered} de ${habits.length} registrados`}
+        </p>
+        <ul className="m-0 mt-3 flex max-w-[300px] list-none flex-col gap-2 p-0">
+          {rows.map((r) => (
+            <li key={r.label} className="flex items-center justify-between gap-3 text-[13px]">
+              <span className="flex items-center gap-2 text-fg-3">
+                <span className="size-2 rounded-full" style={{ background: r.color }} aria-hidden="true" />
+                {r.label}
+              </span>
+              <span className="font-semibold tabular-nums text-fg">{r.value}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 // Day flow: last night's habits → "Iniciar el día" → the rest of the day.
 // Until the day starts, the rest of the day is shown locked below the button.
 export default function TrackerView({
@@ -156,6 +198,8 @@ export default function TrackerView({
       </p>
 
       <div className="mt-8 flex flex-col gap-8">
+        {dayStarted && <TodayPanel habits={habits} entries={entries} closed={closed} />}
+
         {/* Last night + waking up */}
         {inicio.length > 0 &&
           (dayStarted ? (
