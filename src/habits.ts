@@ -8,12 +8,30 @@
 // be answered before the day can start.
 export type Bloque = 'inicio' | 'manana' | 'dia' | 'noche';
 
-export const BLOQUES: { id: Bloque; label: string; hint: string }[] = [
-  { id: 'inicio', label: 'Anoche y al despertar', hint: 'Obligatorio para iniciar el día' },
-  { id: 'manana', label: 'Mañana', hint: 'Rutina al empezar' },
-  { id: 'dia', label: 'Durante el día', hint: 'Se registra cuando ocurre' },
-  { id: 'noche', label: 'Noche', hint: 'Antes de cerrar el día' },
+export const BLOQUES: { id: Bloque; label: string; hint: string; emoji: string; color: string }[] = [
+  { id: 'inicio', label: 'Anoche y al despertar', hint: 'Obligatorio para iniciar el día', emoji: '🌅', color: '#fb923c' },
+  { id: 'manana', label: 'Mañana', hint: 'Rutina al empezar', emoji: '☀️', color: '#facc15' },
+  { id: 'dia', label: 'Durante el día', hint: 'Se registra cuando ocurre', emoji: '⚡', color: '#22d3ee' },
+  { id: 'noche', label: 'Noche', hint: 'Antes de cerrar el día', emoji: '🌙', color: '#a78bfa' },
 ];
+
+export const blockOf = (id: Bloque) => BLOQUES.find((b) => b.id === id) ?? BLOQUES[0];
+
+// Emoji for a habit's tile. Known default ids first, then keywords in the
+// name (so habits created in settings get a sensible one), then a target.
+const EMOJI_BY_ID: Record<string, string> = {
+  sleep: '😴', pray: '🙏', lookmax: '💎', work: '💼', gym: '💪',
+  diet: '🥗', protein: '🥤', minox: '🧴', nofap: '🛡️', scroll: '📱',
+};
+const EMOJI_KEYWORDS: [RegExp, string][] = [
+  [/dorm|sue[ñn]o|descans/i, '😴'], [/or[aáó]|medit|rez|gratitud/i, '🙏'], [/gym|entren|ejerc|pesas|correr|cardio/i, '💪'],
+  [/com[ií]|dieta|nutri|ayuno|agua/i, '🥗'], [/prote|creatina|suplem|vitamin/i, '🥤'], [/leer|lectura|libro|estud/i, '📚'],
+  [/trabaj|foco|product|deep/i, '💼'], [/red|scroll|celu|pantalla|tiktok|insta/i, '📱'], [/fap|porn|abstin/i, '🛡️'],
+  [/ducha|aseo|piel|skin|cara|look/i, '💎'], [/diario|journal|escrib/i, '📝'], [/ahorr|dinero|gasto|invers/i, '💰'],
+];
+export function emojiFor(h: Pick<HabitDef, 'id' | 'nombre'>): string {
+  return EMOJI_BY_ID[h.id] ?? EMOJI_KEYWORDS.find(([re]) => re.test(h.nombre))?.[1] ?? '🎯';
+}
 
 export interface HabitOption {
   id: string;

@@ -1,42 +1,50 @@
 @import "tailwindcss";
 
 /* ==========================================================================
-   Design tokens. The palette is the app's original one (near-black surfaces,
-   orange good, red for failure); only neutrals were organised into a scale.
-   Radius scale: control 8px · card 12px · modal 16px · pill for chips/badges.
+   Design tokens. Vivid night-indigo palette with a violet→pink brand
+   gradient; green/red keep their meaning (done well / failed).
+   Radius scale: control 12px · card 18px · modal 22px · pill for chips/badges.
    ========================================================================== */
 @theme {
   --font-sans: 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
-  --color-bg: #0a0a0a;
-  --color-surface: #111111;
-  --color-sunken: #0d0d0d;
-  --color-raised: #171717;
-  --color-line: #232323;
-  --color-line-strong: #2e2e2e;
+  /* Night-indigo surfaces: dark, but with colour in them. */
+  --color-bg: #0c0a1f;
+  --color-surface: #15122e;
+  --color-sunken: #100e26;
+  --color-raised: #1f1b42;
+  --color-line: #2b2759;
+  --color-line-strong: #3a3573;
 
-  --color-fg: #e5e5e5;
-  --color-fg-2: #c9c9c9;
-  --color-fg-3: #8a8a8a;
+  --color-fg: #f6f4ff;
+  --color-fg-2: #d2cdf3;
+  --color-fg-3: #a29dd0;
 
-  /* Brand: monochrome. Primary actions, navigation, logo, focus. */
-  --color-primary: #f5f5f5;
-  --color-primary-hover: #ffffff;
+  /* Brand: electric violet → hot pink. Actions, navigation, focus. */
+  --color-primary: #a78bfa;
+  --color-primary-hover: #c4b5fd;
+  --color-primary-strong: #7c3aed;
+  --color-pink: #f472b6;
+  --color-amber: #fbbf24;
+  --color-cyan: #22d3ee;
+  --grad-primary: linear-gradient(135deg, #7c3aed 0%, #c026d3 55%, #ec4899 100%);
+  --grad-good: linear-gradient(135deg, #10b981 0%, #22c55e 100%);
+  --grad-bad: linear-gradient(135deg, #ef4444 0%, #f43f5e 100%);
 
-  /* Meaning: green = done well, red = failed. Never used as decoration. */
-  --color-good: #22c55e;
-  --color-good-hover: #4ade80;
-  --color-good-soft: rgba(34, 197, 94, 0.12);
-  --color-good-line: #173d26;
+  /* Meaning: green = done well, red = failed. */
+  --color-good: #34d399;
+  --color-good-hover: #6ee7b7;
+  --color-good-soft: rgba(52, 211, 153, 0.14);
+  --color-good-line: #14614b;
 
-  --color-danger: #ef4444;
-  --color-danger-fg: #f87171;
-  --color-danger-soft: rgba(239, 68, 68, 0.12);
-  --color-danger-line: #43201f;
+  --color-danger: #f43f5e;
+  --color-danger-fg: #fb7185;
+  --color-danger-soft: rgba(244, 63, 94, 0.14);
+  --color-danger-line: #5b2140;
 
-  --radius-control: 8px;
-  --radius-card: 12px;
-  --radius-modal: 16px;
+  --radius-control: 12px;
+  --radius-card: 18px;
+  --radius-modal: 22px;
 }
 
 /* ==========================================================================
@@ -59,8 +67,24 @@ body {
 }
 
 ::selection {
-  background: var(--color-primary);
-  color: var(--color-bg);
+  background: var(--color-primary-strong);
+  color: #fff;
+}
+
+/* App backdrop: soft colour glows over the night base. */
+.app-bg {
+  background:
+    radial-gradient(900px 480px at 8% -8%, rgba(124, 58, 237, 0.30), transparent 60%),
+    radial-gradient(760px 420px at 100% 4%, rgba(236, 72, 153, 0.20), transparent 60%),
+    radial-gradient(700px 500px at 50% 112%, rgba(34, 211, 238, 0.12), transparent 60%),
+    var(--page-bg);
+  background-repeat: no-repeat;
+}
+.text-grad {
+  background: var(--grad-primary);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 a {
@@ -85,11 +109,12 @@ button {
 @layer components {
   /* ---- Surfaces & text -------------------------------------------------- */
   .card {
-    background: var(--color-surface);
+    background: linear-gradient(160deg, rgba(34, 29, 74, 0.92) 0%, rgba(21, 18, 46, 0.96) 100%);
     border: 1px solid var(--color-line);
     border-radius: var(--radius-card);
     padding: 20px;
-    transition: border-color 0.2s ease;
+    box-shadow: 0 6px 24px -12px rgba(0, 0, 0, 0.6);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
   }
   @media (max-width: 480px) {
     .card { padding: 16px; }
@@ -97,10 +122,10 @@ button {
 
   .page-title {
     margin: 0;
-    font-size: 24px;
-    line-height: 32px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
+    font-size: 30px;
+    line-height: 36px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
     color: var(--color-fg);
   }
   .page-sub {
@@ -110,9 +135,9 @@ button {
   }
   .section-title {
     margin: 0;
-    font-size: 15px;
+    font-size: 16px;
     line-height: 22px;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: -0.01em;
     color: var(--color-fg);
   }
@@ -181,16 +206,16 @@ button {
   }
   .input::placeholder,
   .textarea::placeholder {
-    color: #707070;
+    color: #7d78ad;
   }
   .input:hover,
   .textarea:hover {
-    border-color: #3d3d3d;
+    border-color: #5047a3;
   }
   .input:focus,
   .textarea:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.25);
   }
 
   /* ---- Buttons ---------------------------------------------------------- */
@@ -222,10 +247,11 @@ button {
     font-size: 12px;
   }
   .btn-lg {
-    height: 48px;
-    padding: 0 24px;
-    font-size: 14px;
-    font-weight: 600;
+    height: 54px;
+    padding: 0 28px;
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 16px;
   }
   .btn-icon {
     width: 32px;
@@ -233,17 +259,20 @@ button {
   }
 
   .btn-primary {
-    background: var(--color-primary);
-    color: var(--color-bg);
-    font-weight: 600;
+    background: var(--grad-primary);
+    color: #fff;
+    font-weight: 700;
+    box-shadow: 0 8px 22px -8px rgba(192, 38, 211, 0.65);
   }
   .btn-primary:hover:not(:disabled) {
-    background: var(--color-primary-hover);
+    filter: brightness(1.12);
+    box-shadow: 0 10px 28px -8px rgba(192, 38, 211, 0.85);
   }
   .btn-primary:disabled {
     background: var(--color-raised);
     border-color: var(--color-line);
-    color: #707070;
+    color: #7d78ad;
+    box-shadow: none;
   }
 
   .btn-secondary {
@@ -253,7 +282,7 @@ button {
   }
   .btn-secondary:hover:not(:disabled) {
     background: var(--color-raised);
-    border-color: #3d3d3d;
+    border-color: #5047a3;
     color: var(--color-fg);
   }
   .btn-secondary:disabled {
@@ -280,12 +309,12 @@ button {
     border-color: var(--color-danger);
   }
   .btn-danger-solid {
-    background: var(--color-danger);
-    color: var(--color-bg);
-    font-weight: 600;
+    background: var(--grad-bad);
+    color: #fff;
+    font-weight: 700;
   }
   .btn-danger-solid:hover:not(:disabled) {
-    background: #f05252;
+    filter: brightness(1.1);
   }
   .btn:disabled.btn-danger-solid {
     opacity: 0.5;
@@ -297,7 +326,7 @@ button {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    min-height: 44px;
+    min-height: 48px;
     min-width: 0;
     padding: 10px 14px;
     background: var(--color-sunken);
@@ -315,7 +344,7 @@ button {
     transform: scale(0.98);
   }
   .choice:hover {
-    border-color: #3d3d3d;
+    border-color: #5047a3;
     color: var(--color-fg);
   }
   .choice-sm {
@@ -323,17 +352,31 @@ button {
     padding: 6px 12px;
     font-size: 12px;
   }
+  .choice-idle-ok {
+    background: rgba(52, 211, 153, 0.07);
+    border-color: rgba(52, 211, 153, 0.35);
+  }
+  .choice-idle-bad {
+    background: rgba(244, 63, 94, 0.07);
+    border-color: rgba(244, 63, 94, 0.35);
+  }
+  .choice-idle-ok:hover { background: rgba(52, 211, 153, 0.16); border-color: var(--color-good); }
+  .choice-idle-bad:hover { background: rgba(244, 63, 94, 0.16); border-color: var(--color-danger); }
   .choice-ok,
   .choice-ok:hover {
-    background: var(--color-good-soft);
-    border-color: var(--color-good);
-    color: var(--color-good);
+    background: var(--grad-good);
+    border-color: transparent;
+    color: #04281c;
+    font-weight: 700;
+    box-shadow: 0 8px 20px -8px rgba(16, 185, 129, 0.7);
   }
   .choice-bad,
   .choice-bad:hover {
-    background: var(--color-danger-soft);
-    border-color: var(--color-danger);
-    color: var(--color-danger-fg);
+    background: var(--grad-bad);
+    border-color: transparent;
+    color: #fff;
+    font-weight: 700;
+    box-shadow: 0 8px 20px -8px rgba(244, 63, 94, 0.7);
   }
 
   .chip {
@@ -351,7 +394,7 @@ button {
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
   .chip:hover {
-    border-color: #3d3d3d;
+    border-color: #5047a3;
     color: var(--color-fg);
   }
   .chip-on,
@@ -359,6 +402,7 @@ button {
     background: var(--color-danger-soft);
     border-color: var(--color-danger);
     color: var(--color-danger-fg);
+    font-weight: 600;
   }
 
   .badge {
@@ -392,7 +436,7 @@ button {
     padding: 3px;
     background: var(--color-sunken);
     border: 1px solid var(--color-line);
-    border-radius: 10px;
+    border-radius: 14px;
   }
   .seg-item {
     flex: 1 1 0;
@@ -400,7 +444,7 @@ button {
     padding: 0 12px;
     background: transparent;
     border: 0;
-    border-radius: 7px;
+    border-radius: 10px;
     color: var(--color-fg-3);
     font-size: 12px;
     font-weight: 500;
@@ -412,9 +456,10 @@ button {
   }
   .seg-item-on,
   .seg-item-on:hover {
-    background: var(--color-raised);
-    color: var(--color-fg);
-    box-shadow: 0 0 0 1px var(--color-line-strong);
+    background: var(--grad-primary);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 4px 14px -6px rgba(192, 38, 211, 0.7);
   }
 
   .tabs {
@@ -446,9 +491,10 @@ button {
   }
   .tab-on {
     color: var(--color-fg);
+    font-weight: 600;
   }
   .tab-on svg {
-    color: var(--color-primary);
+    color: var(--color-pink);
   }
   .tab-on::after {
     content: '';
@@ -456,9 +502,9 @@ button {
     left: 8px;
     right: 8px;
     bottom: -1px;
-    height: 2px;
-    border-radius: 2px 2px 0 0;
-    background: var(--color-primary);
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    background: var(--grad-primary);
   }
 
   /* Phone navigation: fixed bottom bar, like a native app. */
@@ -469,7 +515,9 @@ button {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-    background: var(--page-bg, var(--color-bg));
+    background: color-mix(in srgb, var(--page-bg, var(--color-bg)) 88%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
     border-top: 1px solid var(--color-line);
   }
   .bottom-tab {
@@ -490,18 +538,63 @@ button {
     transition: color 0.15s ease;
   }
   .bottom-tab-on {
-    color: var(--color-primary);
+    color: var(--color-fg);
+    font-weight: 600;
+    background: rgba(124, 58, 237, 0.20);
   }
-  .bottom-tab-on::before {
-    content: '';
+  .bottom-tab-on svg {
+    color: var(--color-pink);
+  }
+
+  /* ---- Emoji tiles & block banners -------------------------------------- */
+  .emoji-tile {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    font-size: 23px;
+    line-height: 1;
+    background: linear-gradient(145deg, color-mix(in srgb, var(--tile, #7c3aed) 38%, transparent), color-mix(in srgb, var(--tile, #7c3aed) 14%, transparent));
+    border: 1px solid color-mix(in srgb, var(--tile, #7c3aed) 55%, transparent);
+  }
+  .emoji-tile-sm {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+    font-size: 18px;
+  }
+  .emoji-tile-lg {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    font-size: 27px;
+  }
+  .emoji-mark {
     position: absolute;
-    top: -7px;
-    left: 50%;
-    width: 28px;
-    height: 2px;
-    margin-left: -14px;
-    border-radius: 0 0 2px 2px;
-    background: var(--color-primary);
+    right: -5px;
+    bottom: -5px;
+    display: grid;
+    place-items: center;
+    width: 19px;
+    height: 19px;
+    border-radius: 50%;
+    border: 2px solid var(--color-surface);
+    color: #fff;
+  }
+
+  .hero {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(167, 139, 250, 0.35);
+    border-radius: var(--radius-card);
+    padding: 22px;
+    background:
+      radial-gradient(420px 220px at 0% 0%, rgba(124, 58, 237, 0.45), transparent 70%),
+      radial-gradient(380px 220px at 100% 100%, rgba(236, 72, 153, 0.35), transparent 70%),
+      var(--color-surface);
   }
 
   /* ---- Feedback --------------------------------------------------------- */
@@ -527,7 +620,7 @@ button {
     align-items: center;
     gap: 8px;
     padding: 32px 20px;
-    border: 1px dashed var(--color-line-strong);
+    border: 2px dashed var(--color-line-strong);
     border-radius: var(--radius-card);
     text-align: center;
     color: var(--color-fg-3);
@@ -558,11 +651,11 @@ button {
     transition: transform 0.15s ease;
   }
   .switch[aria-checked='true'] {
-    background: var(--color-primary);
+    background: var(--grad-primary);
   }
   .switch[aria-checked='true']::after {
     transform: translateX(16px);
-    background: var(--color-bg);
+    background: #fff;
   }
 }
 
@@ -584,6 +677,18 @@ button {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+@keyframes pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes glow {
+  0%, 100% { box-shadow: 0 8px 22px -8px rgba(192, 38, 211, 0.55); }
+  50% { box-shadow: 0 10px 34px -6px rgba(236, 72, 153, 0.95); }
+}
+.anim-pop { animation: pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4) both; }
+.anim-glow { animation: glow 2.2s ease-in-out infinite; }
 
 .anim-fade { animation: fade-in 0.18s ease; }
 .anim-rise { animation: rise-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
@@ -628,8 +733,9 @@ button {
 }
 .splash-track {
   position: relative;
-  width: 96px;
-  height: 1px;
+  width: 120px;
+  height: 3px;
+  border-radius: 3px;
   overflow: hidden;
   background: var(--color-line);
   opacity: 0;
@@ -639,7 +745,7 @@ button {
   position: absolute;
   inset: 0 auto 0 0;
   width: 38%;
-  background: var(--color-primary);
+  background: var(--grad-primary);
   animation: sweep 1.1s ease-in-out infinite;
 }
 

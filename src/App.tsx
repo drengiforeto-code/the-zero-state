@@ -343,8 +343,8 @@ export default function App() {
 
   return (
     <div
-      className="min-h-screen bg-[var(--page-bg)] text-fg transition-colors duration-200"
-      style={{ '--page-bg': s.flash ? '#2a0808' : '#0a0a0a' } as CSSProperties}
+      className="app-bg min-h-screen text-fg transition-colors duration-200"
+      style={{ '--page-bg': s.flash ? '#2e0a1a' : '#0c0a1f' } as CSSProperties}
     >
       <AppHeader tab={s.tab} onTab={(tab) => patch({ tab })} segments={segments} coherence={s.dayStarted ? todayRatio : null} />
 

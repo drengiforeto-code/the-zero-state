@@ -1,5 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
-  <rect width="48" height="48" rx="10" fill="#0a0a0a"/>
-  <ellipse cx="24" cy="24" rx="11.5" ry="17" stroke="#f5f5f5" stroke-width="2.2"/>
-  <line x1="11" y1="39" x2="37" y2="9" stroke="#f5f5f5" stroke-width="2.2" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="g" x1="8" y1="44" x2="40" y2="4" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8b5cf6"/><stop offset="0.55" stop-color="#d946ef"/><stop offset="1" stop-color="#fb7185"/>
+    </linearGradient>
+  </defs>
+  <rect width="48" height="48" rx="11" fill="#0c0a1f"/>
+  <ellipse cx="24" cy="24" rx="11.5" ry="17" stroke="url(#g)" stroke-width="2.6"/>
+  <line x1="11" y1="39" x2="37" y2="9" stroke="url(#g)" stroke-width="2.6" stroke-linecap="round"/>
 </svg>

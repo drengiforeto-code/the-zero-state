@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Hourglass, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { TIME_PUNCHES } from '../content';
 
 const DAY_MS = 86_400_000;
@@ -55,10 +55,10 @@ export default function TimeReality() {
 
   const left = Math.max(0, end - now.getTime());
   const units = [
-    { value: Math.floor(left / DAY_MS), label: 'días' },
-    { value: Math.floor(left / 3_600_000) % 24, label: 'horas' },
-    { value: Math.floor(left / 60_000) % 60, label: 'min' },
-    { value: Math.floor(left / 1000) % 60, label: 'seg' },
+    { value: Math.floor(left / DAY_MS), label: 'días', color: '#f472b6' },
+    { value: Math.floor(left / 3_600_000) % 24, label: 'horas', color: '#a78bfa' },
+    { value: Math.floor(left / 60_000) % 60, label: 'min', color: '#22d3ee' },
+    { value: Math.floor(left / 1000) % 60, label: 'seg', color: '#fbbf24' },
   ];
   const pct = fmtPct.format(elapsed * 100);
 
@@ -70,14 +70,13 @@ export default function TimeReality() {
     .replace('{anio}', String(y));
 
   return (
-    <section className="card" aria-label="Realidad temporal">
+    <section className="hero" aria-label="Realidad temporal">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="eyebrow m-0 flex items-center gap-1.5">
-            <Hourglass size={12} aria-hidden="true" />
-            Realidad temporal
+            ⏳ Realidad temporal
           </p>
-          <p className="m-0 mt-2.5 text-[22px] font-semibold leading-7 tracking-tight text-fg">
+          <p className="m-0 mt-2.5 text-[24px] font-bold leading-7 tracking-tight text-fg">
             {weekday}, {dayMonth}
           </p>
           <p className="help mt-1 tabular-nums">
@@ -90,13 +89,17 @@ export default function TimeReality() {
       </div>
 
       <div className="mt-5">
-        <p className="help m-0 mb-2">Para que se acabe el {y}</p>
+        <p className="help m-0 mb-2">⏰ Para que se acabe el {y}</p>
         <div className="grid grid-cols-4 gap-2" role="timer" aria-label={`Faltan ${units[0].value} días para que termine el año`}>
           {units.map((u, i) => (
-            <div key={u.label} className="rounded-control border border-line bg-sunken px-2 py-2.5 text-center">
+            <div
+              key={u.label}
+              className="rounded-control border px-2 py-3 text-center"
+              style={{ background: `color-mix(in srgb, ${u.color} 12%, transparent)`, borderColor: `color-mix(in srgb, ${u.color} 40%, transparent)` }}
+            >
               <span
-                className="block text-[24px] font-semibold leading-none tracking-tight tabular-nums"
-                style={{ color: 'var(--color-fg)' }}
+                className="block text-[26px] font-bold leading-none tracking-tight tabular-nums"
+                style={{ color: u.color }}
               >
                 {i === 0 ? u.value : pad2(u.value)}
               </span>
@@ -107,19 +110,19 @@ export default function TimeReality() {
       </div>
 
       <div className="mt-4">
-        <div className="h-1.5 overflow-hidden rounded-full bg-line" role="progressbar" aria-label="Avance del año" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(elapsed * 100)}>
-          <div className="h-full rounded-full bg-primary" style={{ width: `${elapsed * 100}%` }} />
+        <div className="h-2 overflow-hidden rounded-full bg-line" role="progressbar" aria-label="Avance del año" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(elapsed * 100)}>
+          <div className="h-full rounded-full" style={{ width: `${elapsed * 100}%`, background: 'var(--grad-primary)' }} />
         </div>
         <div className="mt-2 flex flex-wrap justify-between gap-x-4 gap-y-1 text-[12px] text-fg-3">
           <span><span className="font-semibold tabular-nums text-fg-2">{pct}%</span> del {y} ya se fue</span>
           <span className="tabular-nums">
-            {weekendsLeft(now)} fines de semana · ≈ {groupThousands(Math.round((left / 3_600_000) * (AWAKE_HOURS / 24)))} horas útiles (despierto)
+            🎉 {weekendsLeft(now)} fines de semana · ≈ {groupThousands(Math.round((left / 3_600_000) * (AWAKE_HOURS / 24)))} horas útiles (despierto)
           </span>
         </div>
       </div>
 
       <div className="mt-5 flex items-start gap-3 border-t border-line pt-4">
-        <p className="m-0 min-w-0 flex-1 border-l-2 border-primary pl-3 text-[15px] font-semibold leading-6 text-fg">{punch}</p>
+        <p className="m-0 min-w-0 flex-1 border-l-4 border-pink pl-3 text-[15px] font-semibold leading-6 text-fg">🥊 {punch}</p>
         <button type="button" className="btn btn-secondary btn-sm btn-icon shrink-0" aria-label="Otra frase" title="Otra frase" onClick={() => setShift(shift + 1)}>
           <RefreshCw size={14} aria-hidden="true" />
         </button>
