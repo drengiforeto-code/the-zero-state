@@ -4,6 +4,7 @@ import { BLOQUES, isChecklist, newHabitId } from '../habits';
 import type { Bloque, HabitDef, HabitOption } from '../habits';
 import { sentence } from '../lib/text';
 import { segClass } from '../ui';
+import InstallCard from './InstallCard';
 
 // ---------------------------------------------------------------------------
 // Habit manager: create, edit, reorder and archive habits. Archiving (instead
@@ -291,12 +292,16 @@ export default function SettingsTab({
         </button>
       </div>
 
+      <div className="mt-6">
+        <InstallCard />
+      </div>
+
       {syncError && (
         <div className="alert alert-danger mt-6" role="alert">
           <CircleAlert size={18} className="mt-px shrink-0" aria-hidden="true" />
           <div className="min-w-0">
             <p className="m-0 font-medium">Sin sincronizar con Supabase</p>
-            <p className="m-0 mt-0.5 break-words text-[12px] opacity-90">{syncError}. Los cambios se guardan en este dispositivo.</p>
+            <p className="m-0 mt-0.5 break-words text-[12px] opacity-90">{syncError.replace(/\.$/, '')}. Los cambios se guardan en este dispositivo.</p>
           </div>
         </div>
       )}
