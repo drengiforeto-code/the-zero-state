@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import type { SummaryState } from '../store';
 import { sentence } from '../lib/text';
 import { tierColor } from '../ui';
+import Ring from './Ring';
 
 // End-of-day summary. Closes with the button, a click on the backdrop or Escape.
 export default function SummaryModal({ summary, closedTime, onClose }: { summary: SummaryState; closedTime: string; onClose: () => void }) {
@@ -23,11 +24,15 @@ export default function SummaryModal({ summary, closedTime, onClose }: { summary
         className="anim-rise max-h-[88vh] w-full max-w-[420px] overflow-y-auto rounded-modal border border-line-strong bg-surface p-6 shadow-[0_24px_60px_-16px_rgba(0,0,0,0.8)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="eyebrow m-0">Día cerrado{closedTime ? ` · ${closedTime}` : ''}</p>
-        <h2 id="summary-title" className="m-0 mt-3 text-[48px] font-semibold leading-none tracking-tight tabular-nums" style={{ color: tone }}>
-          {summary.pct}%
-        </h2>
-        <p className="m-0 mt-2 text-[13px] text-fg-3">de tu objetivo cumplido</p>
+        <div className="flex flex-col items-center text-center">
+          <p className="eyebrow m-0">Día cerrado{closedTime ? ` · ${closedTime}` : ''}</p>
+          <div className="mt-5">
+            <Ring value={summary.pct / 100} size={148} stroke={10} color={tone} label={`${summary.pct}% de tu objetivo cumplido`}>
+              <span id="summary-title" className="text-[40px] font-semibold leading-none tracking-tight tabular-nums" style={{ color: tone }}>{summary.pct}%</span>
+            </Ring>
+          </div>
+          <p className="m-0 mt-4 text-[13px] text-fg-3">de tu objetivo cumplido</p>
+        </div>
 
         {summary.improve.length > 0 && (
           <div className="mt-6">

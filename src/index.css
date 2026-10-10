@@ -369,6 +369,11 @@ button {
     font-weight: 500;
     white-space: nowrap;
   }
+  .badge-ok {
+    background: var(--color-accent-soft);
+    border-color: var(--color-accent-line);
+    color: var(--color-accent);
+  }
   .badge-danger {
     background: var(--color-danger-soft);
     border-color: var(--color-danger-line);
@@ -448,6 +453,49 @@ button {
     bottom: -1px;
     height: 2px;
     border-radius: 2px 2px 0 0;
+    background: var(--color-accent);
+  }
+
+  /* Phone navigation: fixed bottom bar, like a native app. */
+  .bottom-nav {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 20;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    background: var(--page-bg, var(--color-bg));
+    border-top: 1px solid var(--color-line);
+  }
+  .bottom-tab {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 52px;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-control);
+    color: var(--color-fg-3);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  .bottom-tab-on {
+    color: var(--color-accent);
+  }
+  .bottom-tab-on::before {
+    content: '';
+    position: absolute;
+    top: -7px;
+    left: 50%;
+    width: 28px;
+    height: 2px;
+    margin-left: -14px;
+    border-radius: 0 0 2px 2px;
     background: var(--color-accent);
   }
 
@@ -536,6 +584,59 @@ button {
 .anim-rise { animation: rise-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .anim-toast { animation: toast-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .anim-spin { animation: spin 0.9s linear infinite; }
+
+/* Boot screen */
+@keyframes draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes word-in {
+  from { opacity: 0; letter-spacing: 0.7em; }
+  to { opacity: 1; letter-spacing: 0.36em; }
+}
+@keyframes track-in {
+  to { opacity: 1; }
+}
+@keyframes sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(260%); }
+}
+.logo-ring {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: draw 1s cubic-bezier(0.65, 0, 0.35, 1) 0.1s forwards;
+}
+.logo-slash {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: draw 0.5s cubic-bezier(0.65, 0, 0.35, 1) 0.85s forwards;
+}
+.splash {
+  transition: opacity 0.4s ease;
+}
+.splash-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+.splash-word {
+  opacity: 0;
+  animation: word-in 1s ease 0.9s forwards;
+}
+.splash-track {
+  position: relative;
+  width: 96px;
+  height: 1px;
+  overflow: hidden;
+  background: var(--color-line);
+  opacity: 0;
+  animation: track-in 0.4s ease 1.2s forwards;
+}
+.splash-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  background: var(--color-accent);
+  animation: sweep 1.1s ease-in-out infinite;
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

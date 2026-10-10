@@ -1,34 +1,24 @@
 import { BarChart3, ListChecks, Settings } from 'lucide-react';
+import { APP_NAME } from '../content';
 import type { Tab } from '../store';
 import { tabClass, tierColor } from '../ui';
-
-export const APP_NAME = 'Zero State';
+import Logo from './Logo';
 
 export interface ProgressSegment {
   id: string;
   state: 'ok' | 'bad' | 'pending';
 }
 
-// Brand mark: concentric rings (same shape as the favicon).
-function Mark() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <circle cx="24" cy="24" r="17" stroke="#f7931a" strokeWidth="3.5" />
-      <circle cx="24" cy="24" r="8" stroke="#f7931a" strokeWidth="3.5" />
-      <circle cx="24" cy="24" r="2.5" fill="#f7931a" />
-    </svg>
-  );
-}
-
-const TABS: { id: Tab; label: string; icon: typeof ListChecks }[] = [
-  { id: 'tracker', label: 'Tracker', icon: ListChecks },
-  { id: 'reports', label: 'Reportes', icon: BarChart3 },
-  { id: 'settings', label: 'Configuración', icon: Settings },
+const TABS: { id: Tab; label: string; short: string; icon: typeof ListChecks }[] = [
+  { id: 'tracker', label: 'Tracker', short: 'Hoy', icon: ListChecks },
+  { id: 'reports', label: 'Reportes', short: 'Reportes', icon: BarChart3 },
+  { id: 'settings', label: 'Configuración', short: 'Ajustes', icon: Settings },
 ];
 
 const SEGMENT_COLOR = { ok: 'var(--color-accent)', bad: 'var(--color-danger)', pending: 'var(--color-line-strong)' };
 
-// Brand row scrolls away; the nav (tabs + day progress) stays pinned.
+// Navigation: tabs on top from 640px up; on phones a native-style bottom bar.
+// The day-progress strip stays pinned to the top on the tracker.
 export default function AppHeader({
   tab,
   onTab,
@@ -42,26 +32,29 @@ export default function AppHeader({
   coherence: number | null;
 }) {
   const answered = segments.filter((s) => s.state !== 'pending').length;
+  const showStrip = tab === 'tracker' && segments.length > 0;
 
   return (
     <>
-      <header className="mx-auto flex max-w-[680px] items-center gap-2.5 px-4 pb-3 pt-5 sm:px-6">
-        <Mark />
-        <span className="text-[15px] font-semibold tracking-tight text-fg">{APP_NAME}</span>
+      <header className="mx-auto flex max-w-[680px] items-center gap-2.5 px-4 pb-3 pt-[calc(20px+env(safe-area-inset-top))] sm:px-6">
+        <Logo size={26} stroke={1.6} />
+        <span className="text-[12px] font-light uppercase tracking-[0.3em] text-fg">{APP_NAME}</span>
       </header>
 
-      <nav className="sticky top-0 z-10 border-b border-line bg-[var(--page-bg)] transition-colors duration-200" aria-label="Secciones">
+      <div
+        className={`sticky top-0 z-10 bg-[var(--page-bg)] transition-colors duration-200 ${showStrip ? 'border-b border-line' : 'sm:border-b sm:border-line'}`}
+      >
         <div className="mx-auto max-w-[680px] px-4 sm:px-6">
-          <div className="tabs" role="tablist">
+          <nav className="tabs hidden sm:flex" role="tablist" aria-label="Secciones">
             {TABS.map(({ id, label, icon: Icon }) => (
               <button key={id} type="button" role="tab" aria-selected={tab === id} className={tabClass(tab === id)} onClick={() => onTab(id)}>
                 <Icon size={16} strokeWidth={1.8} aria-hidden="true" />
                 {label}
               </button>
             ))}
-          </div>
-          {tab === 'tracker' && segments.length > 0 && (
-            <div className="pb-3 pt-1">
+          </nav>
+          {showStrip && (
+            <div className="pb-3 pt-3 sm:pt-1">
               <div className="mb-2 flex items-center justify-between text-[12px] text-fg-3">
                 <span className="tabular-nums">{answered} de {segments.length} registrados</span>
                 {coherence !== null && (
@@ -85,6 +78,15 @@ export default function AppHeader({
             </div>
           )}
         </div>
+      </div>
+
+      <nav className="bottom-nav sm:hidden" role="tablist" aria-label="Secciones">
+        {TABS.map(({ id, short, icon: Icon }) => (
+          <button key={id} type="button" role="tab" aria-selected={tab === id} className={`bottom-tab ${tab === id ? 'bottom-tab-on' : ''}`} onClick={() => onTab(id)}>
+            <Icon size={22} strokeWidth={tab === id ? 2 : 1.6} aria-hidden="true" />
+            <span>{short}</span>
+          </button>
+        ))}
       </nav>
     </>
   );

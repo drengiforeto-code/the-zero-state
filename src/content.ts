@@ -1,3 +1,5 @@
+export const APP_NAME = 'Zero State';
+
 // Static copy shown when a day is closed, plus the world-average benchmark.
 
 export const stoicQuotes: Record<string, string> = {

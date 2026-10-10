@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { CircleAlert, LoaderCircle, TrendingUp } from 'lucide-react';
 import type { HistoryRecord, PillarRecord, ReportView } from '../store';
 import { WORLD_AVG } from '../content';
@@ -5,6 +6,7 @@ import { localDateStr } from '../lib/history';
 import { sentence } from '../lib/text';
 import { segClass, tierColor } from '../ui';
 import HistoryList from './HistoryList';
+import Ring from './Ring';
 
 // ---------------------------------------------------------------------------
 // Chart helpers
@@ -34,6 +36,93 @@ const VIEWS: { id: ReportView; label: string }[] = [
   { id: 'monthly', label: 'Mensual' },
   { id: 'annual', label: 'Anual' },
 ];
+
+// Average coherence needed for each rank (same thresholds as before).
+const RANKS = [
+  { min: 0, name: 'Recluta', color: '#ff8080' },
+  { min: 0.4, name: 'Disciplinado', color: '#c9c9c9' },
+  { min: 0.6, name: 'Soberano', color: '#f7931a' },
+  { min: 0.8, name: 'Élite', color: '#f7931a' },
+];
+
+const LEGEND = [
+  { label: 'Sin registro', color: 'var(--color-line)' },
+  { label: '< 50%', color: '#ff3333' },
+  { label: '50–69%', color: '#8a8a8a' },
+  { label: '≥ 70%', color: '#f7931a' },
+];
+
+const WIDE = '(min-width: 640px)';
+
+// Consistency calendar: one square per day, weeks as columns (Monday first),
+// coloured by that day's coherence. Wider screens show more weeks so the
+// squares stay small.
+function ConsistencyCalendar({ history }: { history: HistoryRecord[] }) {
+  const [wide, setWide] = useState(() => window.matchMedia(WIDE).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(WIDE);
+    const onChange = () => setWide(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const CAL_WEEKS = wide ? 36 : 20;
+
+  const byDate = new Map(history.map((r) => [r.fecha, r.ratio]));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(today);
+  start.setDate(today.getDate() - ((today.getDay() + 6) % 7) - (CAL_WEEKS - 1) * 7);
+  const todayStr = localDateStr(today);
+
+  const cells: { fecha: string; ratio: number | undefined; label: string }[] = [];
+  for (const d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+    const fecha = localDateStr(d);
+    cells.push({ fecha, ratio: byDate.get(fecha), label: d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) });
+  }
+  const tracked = cells.filter((c) => c.ratio !== undefined).length;
+
+  return (
+    <div className="card">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="section-title">Constancia</h2>
+        <p className="help m-0 tabular-nums">{tracked} {tracked === 1 ? 'día registrado' : 'días registrados'} · últimas {CAL_WEEKS} semanas</p>
+      </div>
+      <div className="mt-4 flex gap-2">
+        <div className="grid grid-rows-7 gap-[3px] text-[10px] leading-none text-fg-3" aria-hidden="true">
+          {['L', '', 'X', '', 'V', '', 'D'].map((d, i) => (
+            <span key={i} className="flex items-center">{d}</span>
+          ))}
+        </div>
+        <div
+          className="grid flex-1 grid-flow-col grid-rows-7 gap-[3px]"
+          style={{ gridTemplateColumns: `repeat(${CAL_WEEKS}, minmax(0, 1fr))` }}
+          role="img"
+          aria-label={`Calendario de constancia: ${tracked} días registrados en las últimas ${CAL_WEEKS} semanas`}
+        >
+          {cells.map((c) => (
+            <div
+              key={c.fecha}
+              title={c.ratio === undefined ? `${c.label}: sin registro` : `${c.label}: ${Math.round(c.ratio * 100)}%`}
+              className="aspect-square rounded-[3px]"
+              style={{
+                background: c.ratio === undefined ? 'var(--color-line)' : tierColor(c.ratio),
+                boxShadow: c.fecha === todayStr ? 'inset 0 0 0 1.5px var(--color-fg-2)' : undefined,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+      <ul className="m-0 mt-4 flex list-none flex-wrap gap-x-4 gap-y-2 p-0">
+        {LEGEND.map((l) => (
+          <li key={l.label} className="flex items-center gap-1.5 text-[11px] text-fg-3">
+            <span className="size-2.5 rounded-[3px]" style={{ background: l.color }} aria-hidden="true" />
+            {l.label}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function Stat({ label, value, color, caption }: { label: string; value: string | number; color?: string; caption?: string }) {
   return (
@@ -150,11 +239,12 @@ export default function ReportsView({
 
   // Rank and world comparison
   const avg = hasData ? ratios.reduce((a, b) => a + b, 0) / ratios.length : 0;
-  let rank = 'Recluta', rankColor = '#ff8080';
-  if (!hasData) { rank = 'Sin rango'; rankColor = '#8a8a8a'; }
-  else if (avg >= 0.8) { rank = 'Élite'; rankColor = '#f7931a'; }
-  else if (avg >= 0.6) { rank = 'Soberano'; rankColor = '#f7931a'; }
-  else if (avg >= 0.4) { rank = 'Disciplinado'; rankColor = '#c9c9c9'; }
+  const rankIdx = RANKS.reduce((acc, r, i) => (avg >= r.min ? i : acc), 0);
+  const rank = hasData ? RANKS[rankIdx].name : 'Sin rango';
+  const rankColor = hasData ? RANKS[rankIdx].color : '#8a8a8a';
+  const nextRank = hasData ? RANKS[rankIdx + 1] : undefined;
+  const toNext = nextRank ? Math.max(1, Math.ceil((nextRank.min - avg) * 100)) : 0;
+  const tierProgress = nextRank ? (avg - RANKS[rankIdx].min) / (nextRank.min - RANKS[rankIdx].min) : 1;
   const deltaPts = Math.round((avg - WORLD_AVG) * 100);
   const beatsPct = Math.min(98, Math.max(2, Math.round(((avg - 0.1) / 0.9) * 100)));
   const globalLine = !hasData
@@ -186,25 +276,38 @@ export default function ReportsView({
           </div>
         )}
 
-        {/* Rank + weakest pillar */}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="card">
-            <p className="help m-0">Tu rango</p>
-            <div className="mt-2 flex items-baseline justify-between gap-3">
-              <p className="metric m-0" style={{ color: rankColor }}>{rank}</p>
-              <p className="m-0 text-[13px] text-fg-3 tabular-nums">Promedio <span className="font-medium text-fg">{Math.round(avg * 100)}%</span></p>
+        {/* Rank hero */}
+        <section className="card" aria-label="Tu rango">
+          <div className="flex items-center gap-5 sm:gap-7">
+            <Ring value={avg} size={112} stroke={8} color={rankColor} label={`Promedio de coherencia: ${Math.round(avg * 100)}%`}>
+              <span className="text-[26px] font-semibold leading-none tracking-tight tabular-nums text-fg">{hasData ? `${Math.round(avg * 100)}%` : '—'}</span>
+              <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.08em] text-fg-3">Promedio</span>
+            </Ring>
+            <div className="min-w-0 flex-1">
+              <p className="help m-0">Tu rango</p>
+              <p className="metric m-0 mt-0.5" style={{ color: rankColor }}>{rank}</p>
+              {nextRank ? (
+                <>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line" role="progressbar" aria-label={`Progreso hacia ${nextRank.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(tierProgress * 100)}>
+                    <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${tierProgress * 100}%`, background: rankColor }} />
+                  </div>
+                  <p className="help mt-2">Te faltan <span className="font-medium text-fg-2 tabular-nums">{toNext} pts</span> para {nextRank.name}</p>
+                </>
+              ) : (
+                <p className="help mt-2">{hasData ? 'Rango máximo. Ahora toca sostenerlo.' : 'Cierra tu primer día para obtener rango.'}</p>
+              )}
             </div>
           </div>
-          <div className="card">
-            <p className="help m-0">Tu pilar más débil</p>
-            <div className="mt-2 flex items-baseline justify-between gap-3">
-              <p className="metric m-0 truncate" style={{ color: weakestCount > 0 ? 'var(--color-danger-fg)' : 'var(--color-fg-3)' }}>
+          <div className="mt-5 flex items-center justify-between gap-3 border-t border-line pt-4">
+            <span className="help">Pilar más débil</span>
+            <span className="min-w-0 truncate text-[13px]">
+              <span className="font-medium" style={{ color: weakestCount > 0 ? 'var(--color-danger-fg)' : 'var(--color-fg-3)' }}>
                 {weakestCount > 0 ? sentence(weakestPillar) : '—'}
-              </p>
-              <p className="m-0 shrink-0 text-[13px] text-fg-3 tabular-nums">{weakestCount} {weakestCount === 1 ? 'fallo' : 'fallos'}</p>
-            </div>
+              </span>
+              {weakestCount > 0 && <span className="text-fg-3 tabular-nums"> · {weakestCount} {weakestCount === 1 ? 'fallo' : 'fallos'}</span>}
+            </span>
           </div>
-        </div>
+        </section>
 
         {/* KPIs */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -214,26 +317,7 @@ export default function ReportsView({
           <Stat label="Mejor racha" value={bestStreak} caption="Histórica" />
         </div>
 
-        {/* World comparison */}
-        <div className="card">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="section-title">Comparativa global</h2>
-            <span className="badge">Estimada</span>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <div>
-              <p className="metric m-0" style={{ color: hasData ? 'var(--color-accent)' : 'var(--color-fg-3)' }}>{hasData ? `Top ${beatsPct}%` : '—'}</p>
-              <p className="help mt-1">{hasData ? `Superas al ${beatsPct}% mundial` : 'Superas al — mundial'}</p>
-            </div>
-            <div>
-              <p className="metric m-0" style={{ color: !hasData ? 'var(--color-fg-3)' : deltaPts >= 0 ? 'var(--color-accent)' : 'var(--color-danger)' }}>
-                {hasData ? `${deltaPts >= 0 ? '+' : ''}${deltaPts} pts` : '—'}
-              </p>
-              <p className="help mt-1">vs promedio mundial</p>
-            </div>
-          </div>
-          <p className="m-0 mt-4 border-t border-line pt-4 text-[13px] leading-5 text-fg-2">{globalLine}</p>
-        </div>
+        <ConsistencyCalendar history={history} />
 
         {/* Trend */}
         <div className="card">
@@ -338,6 +422,27 @@ export default function ReportsView({
             </ul>
           </div>
         )}
+
+        {/* World comparison */}
+        <div className="card">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="section-title">Comparativa global</h2>
+            <span className="badge">Estimada</span>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div>
+              <p className="metric m-0" style={{ color: hasData ? 'var(--color-accent)' : 'var(--color-fg-3)' }}>{hasData ? `Top ${beatsPct}%` : '—'}</p>
+              <p className="help mt-1">{hasData ? `Superas al ${beatsPct}% mundial` : 'Superas al — mundial'}</p>
+            </div>
+            <div>
+              <p className="metric m-0" style={{ color: !hasData ? 'var(--color-fg-3)' : deltaPts >= 0 ? 'var(--color-accent)' : 'var(--color-danger)' }}>
+                {hasData ? `${deltaPts >= 0 ? '+' : ''}${deltaPts} pts` : '—'}
+              </p>
+              <p className="help mt-1">vs promedio mundial</p>
+            </div>
+          </div>
+          <p className="m-0 mt-4 border-t border-line pt-4 text-[13px] leading-5 text-fg-2">{globalLine}</p>
+        </div>
 
         {hasData && <HistoryList records={history} onSave={onSaveDay} onDelete={onDeleteDay} onDeleteAll={onDeleteAll} />}
       </div>
