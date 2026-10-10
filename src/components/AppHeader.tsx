@@ -1,23 +1,12 @@
 import { BarChart3, ListChecks, Settings } from 'lucide-react';
+import { APP_NAME } from '../content';
 import type { Tab } from '../store';
 import { tabClass, tierColor } from '../ui';
-
-export const APP_NAME = 'Zero State';
+import Logo from './Logo';
 
 export interface ProgressSegment {
   id: string;
   state: 'ok' | 'bad' | 'pending';
-}
-
-// Brand mark: concentric rings (same shape as the favicon).
-function Mark() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <circle cx="24" cy="24" r="17" stroke="#f7931a" strokeWidth="3.5" />
-      <circle cx="24" cy="24" r="8" stroke="#f7931a" strokeWidth="3.5" />
-      <circle cx="24" cy="24" r="2.5" fill="#f7931a" />
-    </svg>
-  );
 }
 
 const TABS: { id: Tab; label: string; icon: typeof ListChecks }[] = [
@@ -46,8 +35,8 @@ export default function AppHeader({
   return (
     <>
       <header className="mx-auto flex max-w-[680px] items-center gap-2.5 px-4 pb-3 pt-5 sm:px-6">
-        <Mark />
-        <span className="text-[15px] font-semibold tracking-tight text-fg">{APP_NAME}</span>
+        <Logo size={26} stroke={1.6} />
+        <span className="text-[12px] font-light uppercase tracking-[0.3em] text-fg">{APP_NAME}</span>
       </header>
 
       <nav className="sticky top-0 z-10 border-b border-line bg-[var(--page-bg)] transition-colors duration-200" aria-label="Secciones">

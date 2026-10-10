@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useAppStore } from './store';
 import { supabase, supabaseConfigError } from './lib/supabase';
@@ -13,9 +13,13 @@ import { calloutPool, genericQuote, stoicQuotes, successCallouts } from './conte
 import AppHeader from './components/AppHeader';
 import ReportsView from './components/ReportsView';
 import SettingsTab from './components/SettingsTab';
+import Splash from './components/Splash';
 import SummaryModal from './components/SummaryModal';
 import Toast from './components/Toast';
 import TrackerView from './components/TrackerView';
+
+const BOOT_MIN_MS = 1500;
+const BOOT_MAX_MS = 5000;
 
 const blockRank = (b: Bloque) => BLOQUES.findIndex((x) => x.id === b);
 
@@ -120,9 +124,18 @@ export default function App() {
     return true;
   };
 
+  // Boot screen: stays until the first load settles (never longer than
+  // BOOT_MAX_MS, so a slow network can't trap the user) and never shorter than
+  // BOOT_MIN_MS, so the logo animation can finish.
+  const [boot, setBoot] = useState<'loading' | 'leaving' | 'gone'>('loading');
+
   useEffect(() => {
-    fetchHistory();
-    loadHabits();
+    const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+    const firstLoad = Promise.race([Promise.allSettled([fetchHistory(), loadHabits()]), wait(BOOT_MAX_MS)]);
+    Promise.all([firstLoad, wait(BOOT_MIN_MS)]).then(() => {
+      setBoot('leaving');
+      window.setTimeout(() => setBoot('gone'), 450);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -167,6 +180,8 @@ export default function App() {
       dayStartTime: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
     });
     showToast('Día iniciado. A partir de ahora, cada movimiento cuenta.', 'green');
+    // The start block folds away; bring the rest of the day into view.
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const startNewDay = () => {
@@ -322,6 +337,7 @@ export default function App() {
       </main>
 
       {summaryVisible && s.summary && <SummaryModal summary={s.summary} closedTime={s.closedTime} onClose={() => patch({ summaryDismissed: true })} />}
+      {boot !== 'gone' && <Splash leaving={boot === 'leaving'} />}
       {s.toast && <Toast toast={s.toast} onDismiss={() => patch({ toast: null })} />}
     </div>
   );
