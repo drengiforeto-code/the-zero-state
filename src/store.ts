@@ -48,8 +48,11 @@ export interface AppState {
   habitLayout: number;
   // Today's answers, keyed by habit id.
   entries: Record<string, HabitEntry>;
-  dayStarted: boolean; dayStartTime: string;
-  closed: boolean; closedTime: string; summary: SummaryState | null; summaryDismissed: boolean;
+  // dayDate / closedDate: the tracked day ('YYYY-MM-DD', see logicalDateStr)
+  // the day was started / closed for. A closed day from an earlier date is
+  // cleared automatically so a new one can start.
+  dayStarted: boolean; dayStartTime: string; dayDate: string;
+  closed: boolean; closedTime: string; closedDate: string; summary: SummaryState | null; summaryDismissed: boolean;
   dbHistory: HistoryRecord[]; dbLoading: boolean; dbError: string | null;
   reportView: ReportView; selectedPointIdx: number | null;
   toast: ToastState | null; flash: boolean;
@@ -70,8 +73,8 @@ function buildInitialState(): AppState {
     habits: DEFAULT_HABITS,
     habitsSynced: false, habitsError: null, habitLayout: 0,
     entries: {},
-    dayStarted: false, dayStartTime: '',
-    closed: false, closedTime: '', summary: null, summaryDismissed: false,
+    dayStarted: false, dayStartTime: '', dayDate: '',
+    closed: false, closedTime: '', closedDate: '', summary: null, summaryDismissed: false,
     dbHistory: [], dbLoading: false, dbError: null,
     reportView: 'daily', selectedPointIdx: null,
     toast: null, flash: false,

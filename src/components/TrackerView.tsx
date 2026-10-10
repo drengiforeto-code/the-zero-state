@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, CircleAlert, CircleCheck, Lock, Pencil, Play, X } from 'lucide-react';
+import { Check, CircleAlert, CircleCheck, History, Lock, Pencil, Play, X } from 'lucide-react';
 import { BLOQUES, isAnswered, isOk } from '../habits';
 import type { HabitDef, HabitEntry } from '../habits';
 import { sentence } from '../lib/text';
@@ -124,13 +124,68 @@ function TodayPanel({ habits, entries, closed }: { habits: HabitDef[]; entries: 
   );
 }
 
-// Day flow: last night's habits → "Iniciar el día" → the rest of the day.
-// Until the day starts, the rest of the day is shown locked below the button.
+// The day is closed: score, start/close times and what failed.
+function ClosedPanel({ habits, entries, dayStartTime, closedTime }: { habits: HabitDef[]; entries: Record<string, HabitEntry>; dayStartTime: string; closedTime: string }) {
+  const ok = habits.filter((h) => isOk(h, entries[h.id])).length;
+  const failed = habits.filter((h) => isAnswered(h, entries[h.id]) && !isOk(h, entries[h.id]));
+  const ratio = habits.length ? ok / habits.length : 0;
+  const color = tierColor(ratio);
+  const rows = [
+    { label: 'Iniciado', value: dayStartTime || '—' },
+    { label: 'Cerrado', value: closedTime || '—' },
+    { label: 'Cumplidos', value: `${ok} de ${habits.length}` },
+  ];
+
+  return (
+    <section className="card" aria-label="Día cerrado">
+      <div className="flex items-center gap-5 sm:gap-7">
+        <Ring value={ratio} size={104} stroke={8} color={color} label={`Día cerrado con ${Math.round(ratio * 100)}% de coherencia`}>
+          <span className="text-[26px] font-semibold leading-none tracking-tight tabular-nums" style={{ color }}>{Math.round(ratio * 100)}%</span>
+          <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.08em] text-fg-3">Coherencia</span>
+        </Ring>
+        <div className="min-w-0 flex-1">
+          <span className="badge badge-ok h-7 px-3 text-[12px]">
+            <Lock size={12} aria-hidden="true" />
+            Día cerrado
+          </span>
+          <dl className="m-0 mt-3 flex max-w-[300px] flex-col gap-2">
+            {rows.map((r) => (
+              <div key={r.label} className="flex items-center justify-between gap-3 text-[13px]">
+                <dt className="text-fg-3">{r.label}</dt>
+                <dd className="m-0 font-semibold tabular-nums text-fg">{r.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
+      {failed.length > 0 && (
+        <div className="mt-5 border-t border-line pt-4">
+          <p className="eyebrow m-0 mb-2.5">Fallaste en</p>
+          <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
+            {failed.map((h) => (
+              <li key={h.id} className="badge badge-danger h-7 px-3 text-[12px]">
+                <X size={12} strokeWidth={3} aria-hidden="true" />
+                {sentence(h.nombre)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="help mt-4">Mañana empieza un día nuevo automáticamente.</p>
+    </section>
+  );
+}
+
+// Day flow: last night's habits → "Iniciar el día" → the rest of the day →
+// "Cerrar mi día". Until the day starts, the rest is shown locked below the
+// button; once closed, a summary replaces the day and edits sit behind a fold.
 export default function TrackerView({
   dateLabel,
   dayStarted,
   dayStartTime,
   closed,
+  closedTime,
+  staleDayLabel,
   habits,
   entries,
   habitNumber,
@@ -139,6 +194,9 @@ export default function TrackerView({
   canClose,
   onStart,
   onClose,
+  onSaveClosed,
+  onSetEntries,
+  onDiscardDay,
   onChangeEntry,
   onFeedback,
 }: {
@@ -146,6 +204,9 @@ export default function TrackerView({
   dayStarted: boolean;
   dayStartTime: string;
   closed: boolean;
+  closedTime: string;
+  // Set when the open day was started on an earlier date and never closed.
+  staleDayLabel: string;
   // Active habits, already sorted by block and order.
   habits: HabitDef[];
   entries: Record<string, HabitEntry>;
@@ -156,10 +217,17 @@ export default function TrackerView({
   canClose: boolean;
   onStart: () => void;
   onClose: () => void;
+  onSaveClosed: () => Promise<boolean>;
+  onSetEntries: (entries: Record<string, HabitEntry>) => void;
+  onDiscardDay: () => void;
   onChangeEntry: (id: string, entry: HabitEntry) => void;
   onFeedback: (ok: boolean, message: string) => void;
 }) {
   const [startOpen, setStartOpen] = useState(false);
+  // Answers as they were when editing a closed day began (for "Cancelar").
+  const [editSnapshot, setEditSnapshot] = useState<Record<string, HabitEntry> | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   const inicio = habits.filter((h) => h.bloque === 'inicio');
   const inicioTitle = BLOQUES.find((b) => b.id === 'inicio')?.label ?? 'Inicio';
@@ -189,16 +257,121 @@ export default function TrackerView({
     </section>
   ));
 
-  return (
-    <div className="anim-rise">
+  const header = (
+    <>
       <h1 className="page-title">Hoy</h1>
       <p className="page-sub">
         {dateLabel}
         {dayStarted && dayStartTime && <span> · Iniciado a las {dayStartTime}</span>}
+        {closed && closedTime && <span> · Cerrado a las {closedTime}</span>}
       </p>
+    </>
+  );
+
+  // -------------------------------------------------------------------------
+  // Closed day
+  // -------------------------------------------------------------------------
+  if (closed) {
+    const editing = editSnapshot !== null;
+    const save = async () => {
+      setSaving(true);
+      const ok = await onSaveClosed();
+      setSaving(false);
+      if (ok) setEditSnapshot(null);
+    };
+
+    return (
+      <div className="anim-rise">
+        {header}
+        <div className="mt-8 flex flex-col gap-8">
+          <ClosedPanel habits={habits} entries={entries} dayStartTime={dayStartTime} closedTime={closedTime} />
+
+          <section className="card overflow-hidden p-0" aria-label="Editar el día">
+            <div className="flex items-start gap-3 px-4 py-4 sm:px-5">
+              <History size={20} className="mt-0.5 shrink-0 text-fg-3" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <h2 className="section-title">Editar el día</h2>
+                <p className="help mt-0.5">Corrige una respuesta y guarda: tu historial se actualiza.</p>
+              </div>
+              {!editing && (
+                <button type="button" className="btn btn-secondary btn-sm shrink-0" aria-expanded={false} onClick={() => setEditSnapshot(entries)}>
+                  <Pencil size={13} aria-hidden="true" />
+                  Editar
+                </button>
+              )}
+            </div>
+
+            {editing && (
+              <div className="flex flex-col gap-8 border-t border-line bg-sunken p-4 sm:p-5">
+                {inicio.length > 0 && (
+                  <section>
+                    <SectionHeader title={inicioTitle} />
+                    <div className="flex flex-col gap-3">{inicio.map(renderHabit)}</div>
+                  </section>
+                )}
+                {restSections}
+                <div className="flex flex-col gap-3">
+                  {closeHint && (
+                    <p className="m-0 flex items-start gap-1.5 text-[12px] leading-[18px] text-danger-fg">
+                      <CircleAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                      {closeHint}
+                    </p>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={saving}
+                      onClick={() => { onSetEntries(editSnapshot); setEditSnapshot(null); }}
+                    >
+                      Cancelar
+                    </button>
+                    <button type="button" className="btn btn-primary" disabled={saving || !!closeHint} onClick={save}>
+                      {saving ? 'Guardando…' : 'Guardar cambios'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Open day
+  // -------------------------------------------------------------------------
+  return (
+    <div className="anim-rise">
+      {header}
 
       <div className="mt-8 flex flex-col gap-8">
-        {dayStarted && <TodayPanel habits={habits} entries={entries} closed={closed} />}
+        {staleDayLabel && (
+          <div className="alert flex-col sm:flex-row sm:items-center" role="status">
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              <CircleAlert size={18} className="mt-px shrink-0 text-accent" aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="m-0 font-medium text-fg">Este día empezó el {staleDayLabel.toLowerCase()}</p>
+                <p className="m-0 mt-0.5 text-[12px] text-fg-3">
+                  {confirmDiscard
+                    ? 'Se pierde lo que registraste ese día.'
+                    : 'Ciérralo abajo para guardarlo en su fecha, o descártalo para empezar hoy.'}
+                </p>
+              </div>
+            </div>
+            {confirmDiscard ? (
+              <div className="flex shrink-0 gap-2">
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setConfirmDiscard(false)}>Cancelar</button>
+                <button type="button" className="btn btn-danger-solid btn-sm" onClick={() => { setConfirmDiscard(false); onDiscardDay(); }}>Descartar</button>
+              </div>
+            ) : (
+              <button type="button" className="btn btn-secondary btn-sm shrink-0" onClick={() => setConfirmDiscard(true)}>Descartar y empezar hoy</button>
+            )}
+          </div>
+        )}
+
+        {dayStarted && <TodayPanel habits={habits} entries={entries} closed={false} />}
 
         {/* Last night + waking up */}
         {inicio.length > 0 &&
@@ -260,17 +433,13 @@ export default function TrackerView({
         {dayStarted && (
           <div className="card flex flex-col gap-4">
             <div>
-              <h2 className="section-title">{closed ? 'Día cerrado' : 'Cerrar mi día'}</h2>
-              <p className="help mt-1">
-                {closed
-                  ? 'Tu auditoría ya quedó registrada en el historial.'
-                  : 'Tus respuestas se guardan solas en este dispositivo. Al cerrar el día se registran en el historial.'}
-              </p>
+              <h2 className="section-title">Cerrar mi día</h2>
+              <p className="help mt-1">Tus respuestas se guardan solas en este dispositivo. Al cerrar el día se registran en el historial.</p>
             </div>
-            <button type="button" className="btn btn-primary btn-lg w-full" disabled={!closed && !canClose} onClick={onClose}>
-              {closed ? 'Iniciar nuevo día' : 'Cerrar mi día'}
+            <button type="button" className="btn btn-primary btn-lg w-full" disabled={!canClose} onClick={onClose}>
+              Cerrar mi día
             </button>
-            {!canClose && !closed && closeHint && (
+            {!canClose && closeHint && (
               <p className="m-0 flex items-start gap-1.5 text-[12px] leading-[18px] text-danger-fg">
                 <CircleAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
                 {closeHint}
