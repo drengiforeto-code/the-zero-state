@@ -4,7 +4,7 @@ import type { HistoryRecord, PillarRecord, ReportView } from '../store';
 import { WORLD_AVG } from '../content';
 import { localDateStr } from '../lib/history';
 import { sentence } from '../lib/text';
-import { segClass, tierColor } from '../ui';
+import { BAD, GOOD, MID, segClass, tierColor } from '../ui';
 import HistoryList from './HistoryList';
 import Ring from './Ring';
 
@@ -39,17 +39,17 @@ const VIEWS: { id: ReportView; label: string }[] = [
 
 // Average coherence needed for each rank (same thresholds as before).
 const RANKS = [
-  { min: 0, name: 'Recluta', color: '#ff8080' },
+  { min: 0, name: 'Recluta', color: '#f87171' },
   { min: 0.4, name: 'Disciplinado', color: '#c9c9c9' },
-  { min: 0.6, name: 'Soberano', color: '#f7931a' },
-  { min: 0.8, name: 'Élite', color: '#f7931a' },
+  { min: 0.6, name: 'Soberano', color: GOOD },
+  { min: 0.8, name: 'Élite', color: GOOD },
 ];
 
 const LEGEND = [
   { label: 'Sin registro', color: 'var(--color-line)' },
-  { label: '< 50%', color: '#ff3333' },
-  { label: '50–69%', color: '#8a8a8a' },
-  { label: '≥ 70%', color: '#f7931a' },
+  { label: '< 50%', color: BAD },
+  { label: '50–69%', color: MID },
+  { label: '≥ 70%', color: GOOD },
 ];
 
 const WIDE = '(min-width: 640px)';
@@ -241,7 +241,7 @@ export default function ReportsView({
   const avg = hasData ? ratios.reduce((a, b) => a + b, 0) / ratios.length : 0;
   const rankIdx = RANKS.reduce((acc, r, i) => (avg >= r.min ? i : acc), 0);
   const rank = hasData ? RANKS[rankIdx].name : 'Sin rango';
-  const rankColor = hasData ? RANKS[rankIdx].color : '#8a8a8a';
+  const rankColor = hasData ? RANKS[rankIdx].color : MID;
   const nextRank = hasData ? RANKS[rankIdx + 1] : undefined;
   const toNext = nextRank ? Math.max(1, Math.ceil((nextRank.min - avg) * 100)) : 0;
   const tierProgress = nextRank ? (avg - RANKS[rankIdx].min) / (nextRank.min - RANKS[rankIdx].min) : 1;
@@ -311,7 +311,7 @@ export default function ReportsView({
 
         {/* KPIs */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="Días de soberanía" value={sovereigntyDays} color="var(--color-accent)" caption="Últimos 7 días" />
+          <Stat label="Días de soberanía" value={sovereigntyDays} color="var(--color-good)" caption="Últimos 7 días" />
           <Stat label="Días de esclavitud" value={slaveryDays} color="var(--color-danger)" caption="Últimos 7 días" />
           <Stat label="Racha actual" value={streakDays} caption="Días seguidos" />
           <Stat label="Mejor racha" value={bestStreak} caption="Histórica" />
@@ -349,16 +349,16 @@ export default function ReportsView({
                   <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full overflow-visible" aria-hidden="true">
                     <defs>
                       <linearGradient id="trend-area" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#f7931a" stopOpacity="0.22" />
-                        <stop offset="100%" stopColor="#f7931a" stopOpacity="0" />
+                        <stop offset="0%" stopColor="#f5f5f5" stopOpacity="0.1" />
+                        <stop offset="100%" stopColor="#f5f5f5" stopOpacity="0" />
                       </linearGradient>
                     </defs>
                     {[8, 52, 96].map((y) => (
                       <line key={y} x1="0" y1={y} x2="100" y2={y} stroke="#1f1f1f" strokeWidth="1" vectorEffect="non-scaling-stroke" />
                     ))}
-                    <line x1="0" y1={worldY} x2="100" y2={worldY} stroke="#f7931a" strokeWidth="1" strokeDasharray="4,4" opacity="0.45" vectorEffect="non-scaling-stroke" />
+                    <line x1="0" y1={worldY} x2="100" y2={worldY} stroke="#8a8a8a" strokeWidth="1" strokeDasharray="4,4" opacity="0.6" vectorEffect="non-scaling-stroke" />
                     {n > 1 && <path d={`${linePath} L${chartPoints[n - 1].x},96 L${chartPoints[0].x},96 Z`} fill="url(#trend-area)" stroke="none" />}
-                    <path d={linePath} fill="none" stroke="#f7931a" strokeWidth="1.75" vectorEffect="non-scaling-stroke" opacity="0.9" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d={linePath} fill="none" stroke="#d4d4d4" strokeWidth="1.5" vectorEffect="non-scaling-stroke" opacity="0.75" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   {/* Dots are HTML, not SVG: the SVG is stretched non-uniformly, which would turn circles into ellipses. */}
                   {chartPoints.map((p) => (
@@ -392,7 +392,7 @@ export default function ReportsView({
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-fg-3">
                   <span>{rawSeries[0].label}</span>
-                  <span className="flex items-center gap-1.5 text-accent opacity-80">
+                  <span className="flex items-center gap-1.5 text-fg-3">
                     <svg width="16" height="2" aria-hidden="true"><line x1="0" y1="1" x2="16" y2="1" stroke="currentColor" strokeWidth="2" strokeDasharray="4,3" /></svg>
                     Mundial {worldPct}%
                   </span>
@@ -431,11 +431,11 @@ export default function ReportsView({
           </div>
           <div className="mt-4 grid grid-cols-2 gap-4">
             <div>
-              <p className="metric m-0" style={{ color: hasData ? 'var(--color-accent)' : 'var(--color-fg-3)' }}>{hasData ? `Top ${beatsPct}%` : '—'}</p>
+              <p className="metric m-0" style={{ color: hasData ? 'var(--color-good)' : 'var(--color-fg-3)' }}>{hasData ? `Top ${beatsPct}%` : '—'}</p>
               <p className="help mt-1">{hasData ? `Superas al ${beatsPct}% mundial` : 'Superas al — mundial'}</p>
             </div>
             <div>
-              <p className="metric m-0" style={{ color: !hasData ? 'var(--color-fg-3)' : deltaPts >= 0 ? 'var(--color-accent)' : 'var(--color-danger)' }}>
+              <p className="metric m-0" style={{ color: !hasData ? 'var(--color-fg-3)' : deltaPts >= 0 ? 'var(--color-good)' : 'var(--color-danger)' }}>
                 {hasData ? `${deltaPts >= 0 ? '+' : ''}${deltaPts} pts` : '—'}
               </p>
               <p className="help mt-1">vs promedio mundial</p>

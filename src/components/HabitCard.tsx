@@ -63,21 +63,21 @@ export default function HabitCard({
       ? `${habit.subtareas.length}/${habit.subtareas.length}`
       : sentence(habit.opciones.find((o) => o.id === entry.opcion)?.label ?? '');
     return (
-      <section className="card anim-fade p-0" style={{ borderColor: 'var(--color-accent-line)' }} aria-label={name}>
+      <section className="card anim-fade p-0" style={{ borderColor: 'var(--color-good-line)' }} aria-label={name}>
         <button
           type="button"
           className="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 py-3 text-left text-inherit sm:px-5"
           aria-expanded={false}
           onClick={() => setCollapsed(false)}
         >
-          <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-bg" role="img" aria-label="Cumplido">
+          <span className="grid size-6 shrink-0 place-items-center rounded-full bg-good text-bg" role="img" aria-label="Cumplido">
             <Check size={13} strokeWidth={3} />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[14px] font-medium text-fg">{name}</span>
             {entry.nota.trim() && <span className="block truncate text-[12px] text-fg-3">{entry.nota.trim()}</span>}
           </span>
-          <span className="max-w-[45%] shrink-0 truncate text-[13px] text-accent">{answer}</span>
+          <span className="max-w-[45%] shrink-0 truncate text-[13px] text-good">{answer}</span>
           <ChevronDown size={16} className="shrink-0 text-fg-3" aria-hidden="true" />
         </button>
       </section>
@@ -87,7 +87,7 @@ export default function HabitCard({
   return (
     <section
       className="card"
-      style={failed ? { borderColor: 'var(--color-danger-line)' } : ok ? { borderColor: 'var(--color-accent-line)' } : undefined}
+      style={failed ? { borderColor: 'var(--color-danger-line)' } : ok ? { borderColor: 'var(--color-good-line)' } : undefined}
       aria-label={name}
     >
       <div className="flex items-start gap-3">
@@ -95,8 +95,8 @@ export default function HabitCard({
         <span
           className="mt-px grid size-6 shrink-0 place-items-center rounded-full border text-[11px] font-semibold tabular-nums transition-colors"
           style={{
-            background: failed ? 'var(--color-danger)' : ok ? 'var(--color-accent)' : 'transparent',
-            borderColor: failed ? 'var(--color-danger)' : ok ? 'var(--color-accent)' : 'var(--color-line-strong)',
+            background: failed ? 'var(--color-danger)' : ok ? 'var(--color-good)' : 'transparent',
+            borderColor: failed ? 'var(--color-danger)' : ok ? 'var(--color-good)' : 'var(--color-line-strong)',
             color: failed || ok ? 'var(--color-bg)' : 'var(--color-fg-3)',
           }}
           role="img"

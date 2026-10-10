@@ -9,6 +9,8 @@ const AWAKE_HOURS = 16;
 const fmtInt = new Intl.NumberFormat('es-ES');
 const fmtPct = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 });
 const pad2 = (n: number) => String(n).padStart(2, '0');
+// es-ES leaves 4-digit numbers ungrouped ("1321"); always group them ("1.321").
+const groupThousands = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
 // ISO-8601 week number.
 function isoWeek(d: Date): number {
@@ -94,7 +96,7 @@ export default function TimeReality() {
             <div key={u.label} className="rounded-control border border-line bg-sunken px-2 py-2.5 text-center">
               <span
                 className="block text-[24px] font-semibold leading-none tracking-tight tabular-nums"
-                style={{ color: i === 0 ? 'var(--color-accent)' : 'var(--color-fg)' }}
+                style={{ color: 'var(--color-fg)' }}
               >
                 {i === 0 ? u.value : pad2(u.value)}
               </span>
@@ -106,18 +108,18 @@ export default function TimeReality() {
 
       <div className="mt-4">
         <div className="h-1.5 overflow-hidden rounded-full bg-line" role="progressbar" aria-label="Avance del año" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(elapsed * 100)}>
-          <div className="h-full rounded-full bg-accent" style={{ width: `${elapsed * 100}%` }} />
+          <div className="h-full rounded-full bg-primary" style={{ width: `${elapsed * 100}%` }} />
         </div>
         <div className="mt-2 flex flex-wrap justify-between gap-x-4 gap-y-1 text-[12px] text-fg-3">
           <span><span className="font-semibold tabular-nums text-fg-2">{pct}%</span> del {y} ya se fue</span>
           <span className="tabular-nums">
-            {weekendsLeft(now)} fines de semana · ≈ {fmtInt.format(Math.round((left / 3_600_000) * (AWAKE_HOURS / 24)))} h despierto
+            {weekendsLeft(now)} fines de semana · ≈ {groupThousands(Math.round((left / 3_600_000) * (AWAKE_HOURS / 24)))} horas útiles (despierto)
           </span>
         </div>
       </div>
 
       <div className="mt-5 flex items-start gap-3 border-t border-line pt-4">
-        <p className="m-0 min-w-0 flex-1 border-l-2 border-accent pl-3 text-[15px] font-semibold leading-6 text-fg">{punch}</p>
+        <p className="m-0 min-w-0 flex-1 border-l-2 border-primary pl-3 text-[15px] font-semibold leading-6 text-fg">{punch}</p>
         <button type="button" className="btn btn-secondary btn-sm btn-icon shrink-0" aria-label="Otra frase" title="Otra frase" onClick={() => setShift(shift + 1)}>
           <RefreshCw size={14} aria-hidden="true" />
         </button>

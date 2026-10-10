@@ -5,9 +5,13 @@ import type { Tone } from './store';
 // these just pick the right variant so components share one visual system.
 // ---------------------------------------------------------------------------
 
-// Colour for a 0–1 coherence ratio: orange = sovereign, red = slavery, grey = in between.
+// Colour for a 0–1 coherence ratio: green = sovereign (≥70%), red = slavery
+// (<50%), grey = in between.
+export const GOOD = '#22c55e';
+export const BAD = '#ef4444';
+export const MID = '#8a8a8a';
 export function tierColor(v: number): string {
-  return v >= 0.7 ? '#f7931a' : v < 0.5 ? '#ff3333' : '#8a8a8a';
+  return v >= 0.7 ? GOOD : v < 0.5 ? BAD : MID;
 }
 
 // Answer button; `tone` says whether the option counts as fulfilled ('green') or failed ('red').

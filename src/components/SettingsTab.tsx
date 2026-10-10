@@ -194,7 +194,7 @@ export default function SettingsTab({
                       />
                       <button
                         type="button"
-                        className={`btn btn-sm w-[88px] shrink-0 ${o.ok ? 'btn-accent' : 'btn-danger'}`}
+                        className={`btn btn-sm w-[88px] shrink-0 ${o.ok ? 'btn-good' : 'btn-danger'}`}
                         aria-pressed={o.ok}
                         onClick={() => setOpt(i, { ok: !o.ok })}
                       >
@@ -332,7 +332,7 @@ export default function SettingsTab({
                         <button type="button" className="btn btn-secondary btn-sm btn-icon" disabled={i === list.length - 1} onClick={() => move(h, 1)} aria-label={`Bajar ${sentence(h.nombre)}`}>
                           <ArrowDown size={14} aria-hidden="true" />
                         </button>
-                        <button type="button" className="btn btn-accent btn-sm" onClick={() => edit(h)}>Editar</button>
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => edit(h)}>Editar</button>
                         <button type="button" className="btn btn-danger btn-sm" onClick={() => onSave([{ ...h, activo: false }])}>Quitar</button>
                       </div>
                     </li>
