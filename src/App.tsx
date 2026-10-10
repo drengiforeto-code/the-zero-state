@@ -6,7 +6,7 @@ import { fetchHabits, upsertHabits } from './lib/habitsRepo';
 import { dbRowToHistoryRecord, localDateStr } from './lib/history';
 import type { DiaCerradoDetalle, DiaCerradoRow } from './lib/history';
 import { sentence } from './lib/text';
-import { BLOQUES, isAnswered, isBlocking, isOk, moveNightHabitsToInicio, reasonText } from './habits';
+import { BLOQUES, HABIT_LAYOUT_VERSION, isAnswered, isBlocking, isOk, migrateHabitLayout, reasonText } from './habits';
 import type { Bloque, HabitDef, HabitEntry } from './habits';
 import type { PillarRecord, SummaryState, Tone } from './store';
 import { calloutPool, genericQuote, stoicQuotes, successCallouts } from './content';
@@ -56,19 +56,20 @@ export default function App() {
   const loadHabits = async () => {
     const { habits, error } = await fetchHabits();
     if (error || !habits) { patch({ habitsError: error }); return; }
+    const layout = useAppStore.getState().habitLayout;
     if (habits.length === 0) {
-      const seed = moveNightHabitsToInicio(useAppStore.getState().habits).habits;
+      const seed = migrateHabitLayout(useAppStore.getState().habits, layout).habits;
       const seedError = await upsertHabits(seed);
-      patch(seedError ? { habitsError: seedError } : { habits: seed, habitsSynced: true, habitsError: null, nightHabitsMoved: true });
+      patch(seedError ? { habitsError: seedError } : { habits: seed, habitsSynced: true, habitsError: null, habitLayout: HABIT_LAYOUT_VERSION });
       return;
     }
-    // One-off: habits about last night move to the start-of-day block.
-    if (!useAppStore.getState().nightHabitsMoved) {
-      const moved = moveNightHabitsToInicio(habits);
-      const moveError = moved.changed.length ? await upsertHabits(moved.changed) : null;
-      patch(moveError
-        ? { habits, habitsSynced: true, habitsError: moveError }
-        : { habits: moved.habits, habitsSynced: true, habitsError: null, nightHabitsMoved: true });
+    // Pending layout migrations (e.g. moving habits to another block) run once.
+    if (layout < HABIT_LAYOUT_VERSION) {
+      const migrated = migrateHabitLayout(habits, layout);
+      const saveError = migrated.changed.length ? await upsertHabits(migrated.changed) : null;
+      patch(saveError
+        ? { habits, habitsSynced: true, habitsError: saveError }
+        : { habits: migrated.habits, habitsSynced: true, habitsError: null, habitLayout: HABIT_LAYOUT_VERSION });
       return;
     }
     patch({ habits, habitsSynced: true, habitsError: null });
