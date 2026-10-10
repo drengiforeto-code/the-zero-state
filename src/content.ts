@@ -34,3 +34,30 @@ export const successCallouts = [
 ];
 
 export const WORLD_AVG = 0.52;
+
+// "Realidad temporal" — short reminders that time is running out. One per day
+// (rotates by day of the year); {dias}, {pct} and {anio} are filled in live.
+export const TIME_PUNCHES = [
+  'El año no espera a que tengas ganas.',
+  'Quedan {dias} días. ¿Cuántos más vas a regalar?',
+  'No te falta tiempo. Te sobra distracción.',
+  'Cada scroll es un minuto que no vuelve.',
+  'Mañana es el escondite favorito de los mediocres.',
+  'Ya se fue el {pct}% del {anio}. ¿Y tú qué hiciste?',
+  'Desahuévate: el reloj no negocia.',
+  'Nadie va a recuperar este día por ti.',
+  'Ocupado no es lo mismo que productivo.',
+  'El tiempo que matas te está matando a ti.',
+  'Suelta el celular. La vida está pasando sin ti.',
+  'Un día perdido no se compensa: se acumula.',
+  'Tu yo de diciembre te está mirando. No lo decepciones.',
+  'No estás cansado. Estás distraído.',
+  'La disciplina de hoy es la libertad de diciembre.',
+  'El reloj corre igual si lo miras o no. Muévete.',
+  'Lo urgente te roba lo importante. Elige.',
+  'Quedan {dias} días del {anio}. Ninguno vuelve.',
+  'Hoy no se repite. Haz que cuente.',
+  'Tus excusas no detienen el calendario.',
+  'Lo efímero te cobra en lo importante.',
+  'Si hoy no avanzas, retrocedes: el tiempo no se queda quieto.',
+];

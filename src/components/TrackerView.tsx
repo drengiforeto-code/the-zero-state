@@ -5,6 +5,7 @@ import type { HabitDef, HabitEntry } from '../habits';
 import { sentence } from '../lib/text';
 import { tierColor } from '../ui';
 import HabitCard from './HabitCard';
+import TimeReality from './TimeReality';
 import Ring from './Ring';
 
 function SectionHeader({ title, hint, progress }: { title: string; hint?: string; progress?: { done: number; total: number } }) {
@@ -200,6 +201,7 @@ export default function TrackerView({
   onChangeEntry,
   onFeedback,
 }: {
+  // The tracked day, shown only when it isn't today's date (e.g. after midnight).
   dateLabel: string;
   dayStarted: boolean;
   dayStartTime: string;
@@ -257,14 +259,20 @@ export default function TrackerView({
     </section>
   ));
 
+  const sub = [
+    dateLabel,
+    dayStarted && dayStartTime && `Iniciado a las ${dayStartTime}`,
+    closed && closedTime && `Cerrado a las ${closedTime}`,
+  ].filter(Boolean).join(' · ');
+
+  // Page title, then the time-reality check — the first thing seen every time.
   const header = (
     <>
       <h1 className="page-title">Hoy</h1>
-      <p className="page-sub">
-        {dateLabel}
-        {dayStarted && dayStartTime && <span> · Iniciado a las {dayStartTime}</span>}
-        {closed && closedTime && <span> · Cerrado a las {closedTime}</span>}
-      </p>
+      <p className="page-sub">{sub || 'Aún no has iniciado el día'}</p>
+      <div className="mt-6">
+        <TimeReality />
+      </div>
     </>
   );
 

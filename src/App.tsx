@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { useAppStore } from './store';
 import { supabase, supabaseConfigError } from './lib/supabase';
 import { fetchHabits, upsertHabits } from './lib/habitsRepo';
-import { dbRowToHistoryRecord, logicalDateStr, longDateLabel } from './lib/history';
+import { dbRowToHistoryRecord, localDateStr, logicalDateStr, longDateLabel } from './lib/history';
 import type { DiaCerradoDetalle, DiaCerradoRow } from './lib/history';
 import { sentence } from './lib/text';
 import { BLOQUES, HABIT_LAYOUT_VERSION, isAnswered, isBlocking, isOk, migrateHabitLayout, reasonText } from './habits';
@@ -265,7 +265,8 @@ export default function App() {
     state: !isAnswered(h, s.entries[h.id]) ? ('pending' as const) : isOk(h, s.entries[h.id]) ? ('ok' as const) : ('bad' as const),
   }));
 
-  const dateLabel = longDateLabel(shownDate);
+  // The time-reality card already shows today's date; name the tracked day only when it differs.
+  const dateLabel = shownDate !== localDateStr(new Date()) ? longDateLabel(shownDate) : '';
   const summaryVisible = s.closed && !!s.summary && !s.summaryDismissed;
 
   // Writes the day to the history (insert, or update if it was saved before).
