@@ -5,7 +5,7 @@
 //  - Google Fonts: stale-while-revalidate.
 //  - Everything else (Supabase API, etc.) is never intercepted.
 
-const SHELL = 'zs-shell-v2';
+const SHELL = 'zs-shell-v3';
 const ASSETS = 'zs-assets-v1';
 const FONTS = 'zs-fonts-v1';
 const KEEP = [SHELL, ASSETS, FONTS];

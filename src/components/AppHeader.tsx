@@ -1,7 +1,7 @@
 import { BarChart3, ListChecks, Settings } from 'lucide-react';
 import { APP_NAME } from '../content';
 import type { Tab } from '../store';
-import { tabClass, tierColor } from '../ui';
+import { tabClass, tierColor, tierEmoji } from '../ui';
 import Logo from './Logo';
 
 export interface ProgressSegment {
@@ -15,7 +15,7 @@ const TABS: { id: Tab; label: string; short: string; icon: typeof ListChecks }[]
   { id: 'settings', label: 'Configuración', short: 'Ajustes', icon: Settings },
 ];
 
-const SEGMENT_COLOR = { ok: 'var(--color-good)', bad: 'var(--color-danger)', pending: 'var(--color-line-strong)' };
+const SEGMENT_COLOR = { ok: 'var(--grad-good)', bad: 'var(--grad-bad)', pending: 'var(--color-line-strong)' };
 
 // Navigation: tabs on top from 640px up; on phones a native-style bottom bar.
 // The day-progress strip stays pinned to the top on the tracker.
@@ -37,12 +37,12 @@ export default function AppHeader({
   return (
     <>
       <header className="mx-auto flex max-w-[680px] items-center gap-2.5 px-4 pb-3 pt-[calc(20px+env(safe-area-inset-top))] sm:px-6">
-        <Logo size={26} stroke={1.6} />
-        <span className="text-[12px] font-light uppercase tracking-[0.3em] text-fg">{APP_NAME}</span>
+        <Logo size={30} stroke={2.4} />
+        <span className="text-grad text-[15px] font-bold uppercase tracking-[0.22em]">{APP_NAME}</span>
       </header>
 
       <div
-        className={`sticky top-0 z-10 bg-[var(--page-bg)] transition-colors duration-200 ${showStrip ? 'border-b border-line' : 'sm:border-b sm:border-line'}`}
+        className={`sticky top-0 z-10 bg-[color-mix(in_srgb,var(--page-bg)_86%,transparent)] backdrop-blur-md transition-colors duration-200 ${showStrip ? 'border-b border-line' : 'sm:border-b sm:border-line'}`}
       >
         <div className="mx-auto max-w-[680px] px-4 sm:px-6">
           <nav className="tabs hidden sm:flex" role="tablist" aria-label="Secciones">
@@ -56,10 +56,10 @@ export default function AppHeader({
           {showStrip && (
             <div className="pb-3 pt-3 sm:pt-1">
               <div className="mb-2 flex items-center justify-between text-[12px] text-fg-3">
-                <span className="tabular-nums">{answered} de {segments.length} registrados</span>
+                <span className="tabular-nums">📝 {answered} de {segments.length} registrados</span>
                 {coherence !== null && (
                   <span className="font-medium tabular-nums" style={{ color: tierColor(coherence) }}>
-                    {Math.round(coherence * 100)}% de coherencia
+                    {tierEmoji(coherence)} {Math.round(coherence * 100)}% de coherencia
                   </span>
                 )}
               </div>
@@ -72,7 +72,7 @@ export default function AppHeader({
                 aria-valuenow={answered}
               >
                 {segments.map((s) => (
-                  <div key={s.id} className="h-1 flex-1 rounded-full transition-colors duration-300" style={{ background: SEGMENT_COLOR[s.state] }} />
+                  <div key={s.id} className="h-1.5 flex-1 rounded-full transition-colors duration-300" style={{ background: SEGMENT_COLOR[s.state] }} />
                 ))}
               </div>
             </div>

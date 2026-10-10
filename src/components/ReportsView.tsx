@@ -84,7 +84,7 @@ function ConsistencyCalendar({ history }: { history: HistoryRecord[] }) {
   return (
     <div className="card">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h2 className="section-title">Constancia</h2>
+        <h2 className="section-title">🗓️ Constancia</h2>
         <p className="help m-0 tabular-nums">{tracked} {tracked === 1 ? 'día registrado' : 'días registrados'} · últimas {CAL_WEEKS} semanas</p>
       </div>
       <div className="mt-4 flex gap-2">
@@ -299,7 +299,7 @@ export default function ReportsView({
             </div>
           </div>
           <div className="mt-5 flex items-center justify-between gap-3 border-t border-line pt-4">
-            <span className="help">Pilar más débil</span>
+            <span className="help">🎯 Pilar más débil</span>
             <span className="min-w-0 truncate text-[13px]">
               <span className="font-medium" style={{ color: weakestCount > 0 ? 'var(--color-danger-fg)' : 'var(--color-fg-3)' }}>
                 {weakestCount > 0 ? sentence(weakestPillar) : '—'}
@@ -311,10 +311,10 @@ export default function ReportsView({
 
         {/* KPIs */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="Días de soberanía" value={sovereigntyDays} color="var(--color-good)" caption="Últimos 7 días" />
-          <Stat label="Días de esclavitud" value={slaveryDays} color="var(--color-danger)" caption="Últimos 7 días" />
-          <Stat label="Racha actual" value={streakDays} caption="Días seguidos" />
-          <Stat label="Mejor racha" value={bestStreak} caption="Histórica" />
+          <Stat label="👑 Días de soberanía" value={sovereigntyDays} color="var(--color-good)" caption="Últimos 7 días" />
+          <Stat label="⛓️ Días de esclavitud" value={slaveryDays} color="var(--color-danger)" caption="Últimos 7 días" />
+          <Stat label="🔥 Racha actual" value={streakDays} caption="Días seguidos" />
+          <Stat label="🏆 Mejor racha" value={bestStreak} caption="Histórica" />
         </div>
 
         <ConsistencyCalendar history={history} />
@@ -322,7 +322,7 @@ export default function ReportsView({
         {/* Trend */}
         <div className="card">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="section-title">Tendencia de soberanía</h2>
+            <h2 className="section-title">📈 Tendencia de soberanía</h2>
             <div className="seg w-full sm:w-auto" role="group" aria-label="Periodo">
               {VIEWS.map((v) => (
                 <button key={v.id} type="button" className={segClass(view === v.id)} aria-pressed={view === v.id} onClick={() => onView(v.id)}>
@@ -426,7 +426,7 @@ export default function ReportsView({
         {/* World comparison */}
         <div className="card">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="section-title">Comparativa global</h2>
+            <h2 className="section-title">🌍 Comparativa global</h2>
             <span className="badge">Estimada</span>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-4">

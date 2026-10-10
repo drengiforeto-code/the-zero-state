@@ -1,23 +1,27 @@
 import { useState } from 'react';
 import { Check, CircleAlert, CircleCheck, History, Lock, Pencil, Play, X } from 'lucide-react';
-import { BLOQUES, isAnswered, isOk } from '../habits';
+import { BLOQUES, blockOf, emojiFor, isAnswered, isOk } from '../habits';
+import type { CSSProperties } from 'react';
 import type { HabitDef, HabitEntry } from '../habits';
 import { sentence } from '../lib/text';
-import { tierColor } from '../ui';
+import { tierColor, tierEmoji } from '../ui';
 import HabitCard from './HabitCard';
 import TimeReality from './TimeReality';
 import Ring from './Ring';
 
-function SectionHeader({ title, hint, progress }: { title: string; hint?: string; progress?: { done: number; total: number } }) {
+function SectionHeader({ block, title, hint, progress }: { block: ReturnType<typeof blockOf>; title?: string; hint?: string; progress?: { done: number; total: number } }) {
   return (
-    <div className="mb-3 flex items-end justify-between gap-3">
-      <div className="min-w-0">
-        <h2 className="section-title">{title}</h2>
-        {hint && <p className="help mt-0.5">{hint}</p>}
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="emoji-tile emoji-tile-sm" style={{ '--tile': block.color } as CSSProperties} aria-hidden="true">{block.emoji}</span>
+        <div className="min-w-0">
+          <h2 className="section-title">{title ?? block.label}</h2>
+          {(hint ?? block.hint) && <p className="help mt-0.5">{hint ?? block.hint}</p>}
+        </div>
       </div>
       {progress && (
         <span className={`badge shrink-0 tabular-nums ${progress.done === progress.total ? 'badge-ok' : ''}`}>
-          {progress.done}/{progress.total}
+          {progress.done === progress.total ? '🎉 ' : ''}{progress.done}/{progress.total}
         </span>
       )}
     </div>
@@ -53,7 +57,7 @@ function StartSummary({
   return (
     <section className="card overflow-hidden p-0" aria-label={title}>
       <div className="flex items-start gap-3 px-4 pb-3.5 pt-4 sm:px-5">
-        <CircleCheck size={20} className="mt-0.5 shrink-0 text-good" aria-hidden="true" />
+        <span className="emoji-tile emoji-tile-sm" style={{ '--tile': blockOf('inicio').color } as CSSProperties} aria-hidden="true">{blockOf('inicio').emoji}</span>
         <div className="min-w-0 flex-1">
           <h2 className="section-title">{title}</h2>
           <p className="help mt-0.5">
@@ -70,7 +74,8 @@ function StartSummary({
       {!open && (
         <ul className="m-0 flex list-none flex-wrap gap-2 px-4 pb-4 sm:px-5">
           {states.map(({ h, state }) => (
-            <li key={h.id} className={`badge h-7 px-3 text-[12px] ${state === 'ok' ? 'badge-ok' : state === 'bad' ? 'badge-danger' : ''}`}>
+            <li key={h.id} className={`badge h-8 px-3 text-[12px] ${state === 'ok' ? 'badge-ok' : state === 'bad' ? 'badge-danger' : ''}`}>
+              <span aria-hidden="true">{emojiFor(h)}</span>
               {state === 'ok' && <Check size={12} strokeWidth={3} aria-hidden="true" />}
               {state === 'bad' && <X size={12} strokeWidth={3} aria-hidden="true" />}
               {sentence(h.nombre)}
@@ -94,26 +99,28 @@ function TodayPanel({ habits, entries, closed }: { habits: HabitDef[]; entries: 
   const ratio = habits.length ? ok / habits.length : 0;
   const color = tierColor(ratio);
   const rows = [
-    { label: 'Cumplidos', value: ok, color: 'var(--color-good)' },
-    { label: 'Fallados', value: bad, color: 'var(--color-danger)' },
-    { label: 'Pendientes', value: pending, color: 'var(--color-line-strong)' },
+    { label: '✅ Cumplidos', value: ok, color: 'var(--color-good)' },
+    { label: '❌ Fallados', value: bad, color: 'var(--color-danger)' },
+    { label: '⏳ Pendientes', value: pending, color: 'var(--color-amber)' },
   ];
 
   return (
-    <section className="card flex items-center gap-5 sm:gap-7" aria-label="Resumen de hoy">
+    <section className="hero flex items-center gap-5 sm:gap-7" aria-label="Resumen de hoy">
       <Ring value={ratio} size={104} stroke={8} color={color} label={`Coherencia de hoy: ${Math.round(ratio * 100)}%`}>
         <span className="text-[26px] font-semibold leading-none tracking-tight tabular-nums" style={{ color }}>{Math.round(ratio * 100)}%</span>
         <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.08em] text-fg-3">Coherencia</span>
       </Ring>
       <div className="min-w-0 flex-1">
-        <p className="m-0 text-[13px] text-fg-2">
+        <p className="m-0 text-[17px] font-bold leading-6 tracking-tight text-fg">
+          {answered === 0 ? '✨ Empieza con el primero' : ratio >= 0.7 ? '👑 Modo soberano' : ratio >= 0.5 ? '⚡ Vas a medias' : '🚨 Te están ganando'}
+        </p>
+        <p className="help m-0">
           {closed ? 'Día cerrado' : pending === 0 ? 'Todo registrado' : `${answered} de ${habits.length} registrados`}
         </p>
         <ul className="m-0 mt-3 flex max-w-[300px] list-none flex-col gap-2 p-0">
           {rows.map((r) => (
             <li key={r.label} className="flex items-center justify-between gap-3 text-[13px]">
-              <span className="flex items-center gap-2 text-fg-3">
-                <span className="size-2 rounded-full" style={{ background: r.color }} aria-hidden="true" />
+              <span className="flex items-center gap-2 text-fg-2">
                 {r.label}
               </span>
               <span className="font-semibold tabular-nums text-fg">{r.value}</span>
@@ -138,7 +145,7 @@ function ClosedPanel({ habits, entries, dayStartTime, closedTime }: { habits: Ha
   ];
 
   return (
-    <section className="card" aria-label="Día cerrado">
+    <section className="hero" aria-label="Día cerrado">
       <div className="flex items-center gap-5 sm:gap-7">
         <Ring value={ratio} size={104} stroke={8} color={color} label={`Día cerrado con ${Math.round(ratio * 100)}% de coherencia`}>
           <span className="text-[26px] font-semibold leading-none tracking-tight tabular-nums" style={{ color }}>{Math.round(ratio * 100)}%</span>
@@ -147,7 +154,7 @@ function ClosedPanel({ habits, entries, dayStartTime, closedTime }: { habits: Ha
         <div className="min-w-0 flex-1">
           <span className="badge badge-ok h-7 px-3 text-[12px]">
             <Lock size={12} aria-hidden="true" />
-            Día cerrado
+            {tierEmoji(ratio)} Día cerrado
           </span>
           <dl className="m-0 mt-3 flex max-w-[300px] flex-col gap-2">
             {rows.map((r) => (
@@ -251,8 +258,7 @@ export default function TrackerView({
   const restSections = rest.map(({ block, list }) => (
     <section key={block.id}>
       <SectionHeader
-        title={block.label}
-        hint={block.hint}
+        block={block}
         progress={dayStarted ? { done: list.filter((h) => isAnswered(h, entries[h.id])).length, total: list.length } : undefined}
       />
       <div className="flex flex-col gap-3">{list.map(renderHabit)}</div>
@@ -313,7 +319,7 @@ export default function TrackerView({
               <div className="flex flex-col gap-8 border-t border-line bg-sunken p-4 sm:p-5">
                 {inicio.length > 0 && (
                   <section>
-                    <SectionHeader title={inicioTitle} />
+                    <SectionHeader block={blockOf('inicio')} />
                     <div className="flex flex-col gap-3">{inicio.map(renderHabit)}</div>
                   </section>
                 )}
@@ -389,26 +395,26 @@ export default function TrackerView({
             </StartSummary>
           ) : (
             <section>
-              <SectionHeader title={inicioTitle} hint="Responde cómo llegas al día. Con eso se habilita el resto." />
+              <SectionHeader block={blockOf('inicio')} hint="Responde cómo llegas al día. Con eso se habilita el resto." />
               <div className="flex flex-col gap-3">{inicio.map(renderHabit)}</div>
             </section>
           ))}
 
         {/* The start button sits between last night and the rest of the day. */}
         {!dayStarted && (
-          <div className="card flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="hero flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <h2 className="section-title">Iniciar el día</h2>
+              <h2 className="section-title">🚀 Iniciar el día</h2>
               {startHint ? (
                 <p className="m-0 mt-1 flex items-start gap-1.5 text-[12px] leading-[18px] text-danger-fg">
                   <CircleAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
                   {startHint}
                 </p>
               ) : (
-                <p className="help mt-1">Todo listo. Desde aquí, cada movimiento cuenta.</p>
+                <p className="help mt-1">Todo listo. Desde aquí, cada movimiento cuenta. 💥</p>
               )}
             </div>
-            <button type="button" className="btn btn-primary btn-lg w-full sm:w-auto" disabled={!!startHint} onClick={onStart}>
+            <button type="button" className={`btn btn-primary btn-lg w-full sm:w-auto ${startHint ? '' : 'anim-glow'}`} disabled={!!startHint} onClick={onStart}>
               <Play size={16} fill="currentColor" aria-hidden="true" />
               Iniciar el día
             </button>
@@ -417,7 +423,7 @@ export default function TrackerView({
         {dayStarted && inicio.length === 0 && (
           <div className="card flex items-center gap-3 px-4 py-3.5">
             <CircleCheck size={18} className="shrink-0 text-good" aria-hidden="true" />
-            <p className="m-0 text-[13px] text-fg-2">Día iniciado{dayStartTime && <span className="text-fg-3"> · {dayStartTime}</span>}</p>
+            <p className="m-0 text-[13px] text-fg-2">🚀 Día iniciado{dayStartTime && <span className="text-fg-3"> · {dayStartTime}</span>}</p>
           </div>
         )}
 
@@ -439,13 +445,13 @@ export default function TrackerView({
           ))}
 
         {dayStarted && (
-          <div className="card flex flex-col gap-4">
+          <div className="hero flex flex-col gap-4">
             <div>
-              <h2 className="section-title">Cerrar mi día</h2>
+              <h2 className="section-title">🌙 Cerrar mi día</h2>
               <p className="help mt-1">Tus respuestas se guardan solas en este dispositivo. Al cerrar el día se registran en el historial.</p>
             </div>
             <button type="button" className="btn btn-primary btn-lg w-full" disabled={!canClose} onClick={onClose}>
-              Cerrar mi día
+              🏁 Cerrar mi día
             </button>
             {!canClose && closeHint && (
               <p className="m-0 flex items-start gap-1.5 text-[12px] leading-[18px] text-danger-fg">
