@@ -9,10 +9,10 @@
 export type Bloque = 'inicio' | 'manana' | 'dia' | 'noche';
 
 export const BLOQUES: { id: Bloque; label: string; hint: string }[] = [
-  { id: 'inicio', label: 'INICIO', hint: 'Anoche y al despertar · obligatorio para iniciar el día' },
-  { id: 'manana', label: 'MAÑANA', hint: 'Rutina al empezar' },
-  { id: 'dia', label: 'DURANTE EL DÍA', hint: 'Se registra cuando ocurre' },
-  { id: 'noche', label: 'NOCHE', hint: 'Antes de cerrar el día' },
+  { id: 'inicio', label: 'Anoche y al despertar', hint: 'Obligatorio para iniciar el día' },
+  { id: 'manana', label: 'Mañana', hint: 'Rutina al empezar' },
+  { id: 'dia', label: 'Durante el día', hint: 'Se registra cuando ocurre' },
+  { id: 'noche', label: 'Noche', hint: 'Antes de cerrar el día' },
 ];
 
 export interface HabitOption {

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Pencil, Trash2, X } from 'lucide-react';
 import type { HistoryRecord, PillarRecord } from '../store';
-import { smallBtnClass, tierColor } from '../ui';
+import { sentence } from '../lib/text';
+import { segClass, tierColor } from '../ui';
 
 const PAGE = 14;
 
@@ -52,79 +53,71 @@ export default function HistoryList({
   };
 
   return (
-    <div className="mt-6">
-      <div className="text-[11px] text-[#8a8a8a] tracking-wide mb-3">HISTORIAL DIARIO — TOCA UN DÍA PARA VER, EDITAR O BORRAR</div>
-      <div className="flex flex-col gap-2">
+    <div className="card overflow-hidden p-0">
+      <div className="px-5 pb-3 pt-5 max-[480px]:px-4 max-[480px]:pt-4">
+        <h2 className="section-title">Historial diario</h2>
+        <p className="help mt-0.5">Toca un día para ver el detalle, editarlo o borrarlo.</p>
+      </div>
+
+      <ul className="m-0 list-none border-t border-line p-0">
         {visible.map((r) => {
           const expanded = open === r.fecha;
           const pct = Math.round(r.ratio * 100);
           const color = tierColor(r.ratio);
-          const failed = r.pillars.filter((p) => !p.ok).map((p) => p.name);
+          const failed = r.pillars.filter((p) => !p.ok).map((p) => sentence(p.name));
           const isEditing = editing?.fecha === r.fecha;
 
           return (
-            <div key={r.fecha} className="bg-[#111111] border border-[#232323] rounded-sm">
+            <li key={r.fecha} className="border-b border-line last:border-b-0">
               <button
                 type="button"
                 aria-expanded={expanded}
-                className="w-full text-left bg-transparent border-0 p-[14px_16px] cursor-pointer text-inherit"
+                className="flex w-full cursor-pointer items-center gap-4 border-0 bg-transparent px-5 py-3.5 text-left text-inherit transition-colors hover:bg-raised max-[480px]:px-4"
                 onClick={() => toggleDay(r.fecha)}
               >
-                <div className="flex justify-between items-center">
-                  <span className="text-[12px] text-[#c9c9c9] tracking-wide">{dayLabel(r)}</span>
-                  <span className="flex items-center gap-2">
-                    <span className="text-[13px] font-bold" style={{ color }}>{pct}%</span>
-                    <ChevronDown size={14} color="#7d7d7d" className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
-                  </span>
-                </div>
-                <div className="bg-[#1c1c1c] rounded-full h-[3px] w-full overflow-hidden mt-2.5">
-                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
-                </div>
+                <span className="w-[72px] shrink-0 text-[13px] text-fg-2 tabular-nums">{dayLabel(r)}</span>
+                <span className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-line">
+                  <span className="block h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+                </span>
+                <span className="w-10 shrink-0 text-right text-[13px] font-semibold tabular-nums" style={{ color }}>{pct}%</span>
+                <ChevronDown size={16} className={`shrink-0 text-fg-3 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
               </button>
 
               {expanded && (
-                <div className="mx-4 mb-4 border-t border-[#232323] pt-3">
+                <div className="anim-fade border-t border-line bg-sunken px-5 py-4 max-[480px]:px-4">
                   {isEditing && editing ? (
                     <>
-                      <div className="text-[10px] text-[#8a8a8a] tracking-wide mb-2.5">MARCA QUÉ CUMPLISTE ESE DÍA</div>
-                      <div className="flex flex-col gap-2">
+                      <p className="eyebrow m-0 mb-3">Marca qué cumpliste ese día</p>
+                      <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
                         {editing.pillars.map((p, i) => (
-                          <div key={p.id} className="flex items-center justify-between gap-3">
-                            <span className="text-[12px] text-[#c9c9c9] min-w-0 truncate">{p.name}</span>
-                            <div className="flex gap-1.5 shrink-0">
+                          <li key={p.id} className="flex items-center justify-between gap-3">
+                            <span className="min-w-0 truncate text-[13px] text-fg-2">{sentence(p.name)}</span>
+                            <div className="seg shrink-0" role="group" aria-label={sentence(p.name)}>
                               {([true, false] as const).map((value) => (
                                 <button
                                   key={String(value)}
                                   type="button"
                                   aria-pressed={p.ok === value}
-                                  className={`${smallBtnClass} ${
-                                    p.ok === value
-                                      ? value ? 'text-[#f7931a] border-[#f7931a] bg-[rgba(247,147,26,0.12)]' : 'text-[#ff3333] border-[#ff3333] bg-[rgba(255,51,51,0.12)]'
-                                      : 'text-[#8a8a8a] border-[#2a2a2a]'
-                                  }`}
+                                  className={`${segClass(p.ok === value)} inline-flex items-center gap-1.5`}
+                                  style={p.ok === value && !value ? { color: 'var(--color-danger-fg)' } : undefined}
                                   onClick={() => setEditing({ ...editing, pillars: editing.pillars.map((x, j) => (j === i ? { ...x, ok: value } : x)) })}
                                 >
-                                  {value ? '✓ SÍ' : '✗ NO'}
+                                  {value ? <Check size={13} strokeWidth={2.5} aria-hidden="true" /> : <X size={13} strokeWidth={2.5} aria-hidden="true" />}
+                                  {value ? 'Sí' : 'No'}
                                 </button>
                               ))}
                             </div>
-                          </div>
+                          </li>
                         ))}
-                      </div>
-                      <div className="text-[11px] text-[#8a8a8a] mt-3">
-                        NUEVO PUNTAJE: <span className="font-bold" style={{ color: tierColor(ratioOf(editing.pillars)) }}>{Math.round(ratioOf(editing.pillars) * 100)}%</span>
-                      </div>
-                      <div className="flex gap-2 mt-3">
-                        <button type="button" disabled={busy} className={`${smallBtnClass} flex-1 text-[#8a8a8a] border-[#2a2a2a]`} onClick={() => setEditing(null)}>
-                          CANCELAR
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          className={`${smallBtnClass} flex-1 text-[#0a0a0a] bg-[#f7931a]! border-[#f7931a] disabled:opacity-50`}
-                          onClick={() => run(() => onSave(r.fecha, editing.pillars), () => setEditing(null))}
-                        >
-                          {busy ? 'GUARDANDO…' : 'GUARDAR'}
+                      </ul>
+                      <p className="m-0 mt-4 text-[13px] text-fg-3">
+                        Nuevo puntaje{' '}
+                        <span className="font-semibold tabular-nums" style={{ color: tierColor(ratioOf(editing.pillars)) }}>{Math.round(ratioOf(editing.pillars) * 100)}%</span>
+                      </p>
+                      <div className="mt-4 flex justify-end gap-2">
+                        <button type="button" disabled={busy} className="btn btn-secondary btn-sm" onClick={() => setEditing(null)}>Cancelar</button>
+                        <button type="button" disabled={busy} className="btn btn-primary btn-sm" onClick={() => run(() => onSave(r.fecha, editing.pillars), () => setEditing(null))}>
+                          {busy ? 'Guardando…' : 'Guardar cambios'}
                         </button>
                       </div>
                     </>
@@ -132,55 +125,52 @@ export default function HistoryList({
                     <>
                       {failed.length > 0 && (
                         <>
-                          <div className="text-[10px] text-[#ff8080] tracking-wide mb-1.5">FALLASTE EN</div>
-                          <div className="flex flex-wrap gap-1.5 mb-2">
+                          <p className="eyebrow m-0 mb-2.5">Fallaste en</p>
+                          <div className="flex flex-wrap gap-2">
                             {failed.map((name) => (
-                              <span key={name} className="text-[11px] text-[#ff8080] border border-[#3a1e1e] bg-[rgba(255,51,51,0.08)] px-[9px] py-[5px] rounded-sm">
+                              <span key={name} className="badge badge-danger h-7 px-3 text-[12px]">
+                                <X size={12} strokeWidth={3} aria-hidden="true" />
                                 {name}
                               </span>
                             ))}
                           </div>
                         </>
                       )}
-                      {r.notes.map((n, i) => (
-                        <div key={i} className="text-[12px] text-[#c9c9c9] leading-[1.5] mt-1">
-                          <span className="text-[#ff8a4d]">[{n.tag}]</span> {n.text}
-                        </div>
-                      ))}
-                      {r.pillars.length === 0 && (
-                        <div className="text-[11px] text-[#8a8a8a] leading-[1.5]">Registro antiguo sin detalle por hábito: solo se puede borrar.</div>
+                      {r.notes.length > 0 && (
+                        <ul className={`m-0 flex list-none flex-col gap-1.5 p-0 ${failed.length > 0 ? 'mt-4' : ''}`}>
+                          {r.notes.map((n, i) => (
+                            <li key={i} className="text-[13px] leading-5 text-fg-2">
+                              <span className="font-medium text-accent">{sentence(n.tag)}</span> · {n.text}
+                            </li>
+                          ))}
+                        </ul>
                       )}
+                      {failed.length === 0 && r.notes.length === 0 && r.pillars.length > 0 && (
+                        <p className="help m-0">Día completo, sin fallos registrados.</p>
+                      )}
+                      {r.pillars.length === 0 && <p className="help m-0">Registro antiguo sin detalle por hábito: solo se puede borrar.</p>}
 
                       {confirmDelete === r.fecha ? (
-                        <div className="mt-3 border border-[#3a1e1e] bg-[rgba(255,51,51,0.06)] rounded-sm p-3">
-                          <div className="text-[11px] text-[#ff8080] leading-[1.5] mb-2.5">¿Borrar el {dayLabel(r)}? No se puede deshacer.</div>
+                        <div className="alert alert-danger mt-4 flex-col" role="alertdialog" aria-label="Confirmar borrado">
+                          <p className="m-0">¿Borrar el {dayLabel(r)}? No se puede deshacer.</p>
                           <div className="flex gap-2">
-                            <button type="button" disabled={busy} className={`${smallBtnClass} flex-1 text-[#8a8a8a] border-[#2a2a2a]`} onClick={() => setConfirmDelete(null)}>
-                              CANCELAR
-                            </button>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              className={`${smallBtnClass} flex-1 text-[#0a0a0a] bg-[#ff3333]! border-[#ff3333] disabled:opacity-50`}
-                              onClick={() => run(() => onDelete(r.fecha), () => { setConfirmDelete(null); setOpen(null); })}
-                            >
-                              {busy ? 'BORRANDO…' : 'SÍ, BORRAR'}
+                            <button type="button" disabled={busy} className="btn btn-secondary btn-sm" onClick={() => setConfirmDelete(null)}>Cancelar</button>
+                            <button type="button" disabled={busy} className="btn btn-danger-solid btn-sm" onClick={() => run(() => onDelete(r.fecha), () => { setConfirmDelete(null); setOpen(null); })}>
+                              {busy ? 'Borrando…' : 'Sí, borrar'}
                             </button>
                           </div>
                         </div>
                       ) : (
-                        <div className="flex gap-2 mt-3">
+                        <div className="mt-4 flex gap-2">
                           {r.pillars.length > 0 && (
-                            <button
-                              type="button"
-                              className={`${smallBtnClass} flex-1 text-[#f7931a] border-[#3a2a12]`}
-                              onClick={() => setEditing({ fecha: r.fecha, pillars: r.pillars.map((p) => ({ ...p })) })}
-                            >
-                              EDITAR
+                            <button type="button" className="btn btn-accent btn-sm" onClick={() => setEditing({ fecha: r.fecha, pillars: r.pillars.map((p) => ({ ...p })) })}>
+                              <Pencil size={13} aria-hidden="true" />
+                              Editar
                             </button>
                           )}
-                          <button type="button" className={`${smallBtnClass} flex-1 text-[#ff8080] border-[#3a1e1e]`} onClick={() => setConfirmDelete(r.fecha)}>
-                            BORRAR
+                          <button type="button" className="btn btn-danger btn-sm" onClick={() => setConfirmDelete(r.fecha)}>
+                            <Trash2 size={13} aria-hidden="true" />
+                            Borrar
                           </button>
                         </div>
                       )}
@@ -188,45 +178,35 @@ export default function HistoryList({
                   )}
                 </div>
               )}
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ul>
 
       {newestFirst.length > PAGE && (
-        <button
-          type="button"
-          className={`${smallBtnClass} w-full mt-3 text-[#8a8a8a] border-[#2a2a2a]`}
-          onClick={() => setShowAll(!showAll)}
-        >
-          {showAll ? 'VER SOLO LOS ÚLTIMOS 14' : `VER LOS ${newestFirst.length} DÍAS`}
-        </button>
+        <div className="border-t border-line px-5 py-3 max-[480px]:px-4">
+          <button type="button" className="btn btn-secondary btn-sm w-full" onClick={() => setShowAll(!showAll)}>
+            {showAll ? 'Ver solo los últimos 14' : `Ver los ${newestFirst.length} días`}
+          </button>
+        </div>
       )}
 
-      <div className="mt-8 pt-5 border-t border-[#1c1c1c]">
+      <div className="border-t border-line px-5 py-4 max-[480px]:px-4">
         {confirmAll ? (
-          <div className="border border-[#3a1e1e] bg-[rgba(255,51,51,0.06)] rounded-sm p-3.5">
-            <div className="text-[11px] text-[#ff8080] leading-[1.5] mb-3">
-              Vas a borrar los {records.length} días del historial. No se puede deshacer.
-            </div>
+          <div className="alert alert-danger flex-col" role="alertdialog" aria-label="Confirmar borrado total">
+            <p className="m-0">Vas a borrar los {records.length} días del historial. No se puede deshacer.</p>
             <div className="flex gap-2">
-              <button type="button" disabled={busy} className={`${smallBtnClass} flex-1 text-[#8a8a8a] border-[#2a2a2a]`} onClick={() => setConfirmAll(false)}>
-                CANCELAR
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                className={`${smallBtnClass} flex-1 text-[#0a0a0a] bg-[#ff3333]! border-[#ff3333] disabled:opacity-50`}
-                onClick={() => run(onDeleteAll, () => { setConfirmAll(false); setOpen(null); })}
-              >
-                {busy ? 'BORRANDO…' : 'SÍ, BORRAR TODO'}
+              <button type="button" disabled={busy} className="btn btn-secondary btn-sm" onClick={() => setConfirmAll(false)}>Cancelar</button>
+              <button type="button" disabled={busy} className="btn btn-danger-solid btn-sm" onClick={() => run(onDeleteAll, () => { setConfirmAll(false); setOpen(null); })}>
+                {busy ? 'Borrando…' : 'Sí, borrar todo'}
               </button>
             </div>
           </div>
         ) : (
-          <button type="button" className={`${smallBtnClass} w-full text-[#ff8080] border-[#3a1e1e]`} onClick={() => setConfirmAll(true)}>
-            BORRAR TODO EL HISTORIAL
-          </button>
+          <div className="flex items-center justify-between gap-4">
+            <p className="help m-0">Elimina los {records.length} días registrados.</p>
+            <button type="button" className="btn btn-danger btn-sm shrink-0" onClick={() => setConfirmAll(true)}>Borrar todo el historial</button>
+          </div>
         )}
       </div>
     </div>

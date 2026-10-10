@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { ArchiveRestore, ArrowDown, ArrowUp, CircleAlert, Plus, X } from 'lucide-react';
 import { BLOQUES, isChecklist, newHabitId } from '../habits';
 import type { Bloque, HabitDef, HabitOption } from '../habits';
-import { btnClass, cardClass, inputClass, primaryBtnClass, smallBtnClass, viewBtnClass } from '../ui';
+import { sentence } from '../lib/text';
+import { segClass } from '../ui';
 
 // ---------------------------------------------------------------------------
 // Habit manager: create, edit, reorder and archive habits. Archiving (instead
@@ -16,8 +18,6 @@ interface Draft {
   razonesText: string;
   isNew: boolean;
 }
-
-const labelClass = 'text-[10px] text-[#8a8a8a] tracking-wide mb-1.5 block';
 
 function blankHabit(orden: number): HabitDef {
   return {
@@ -59,6 +59,41 @@ function finalize(d: Draft): HabitDef {
   };
 }
 
+// Habits are stored in UPPERCASE; the editor shows them in sentence case and
+// finalize() restores the stored form on save.
+function toDraft(h: HabitDef): HabitDef {
+  const copy = structuredClone(h);
+  return {
+    ...copy,
+    nombre: sentence(copy.nombre),
+    pregunta: sentence(copy.pregunta),
+    opciones: copy.opciones.map((o) => ({ ...o, label: sentence(o.label) })),
+    subtareas: copy.subtareas.map(sentence),
+  };
+}
+
+function Field({ label, hint, htmlFor, children }: { label: string; hint?: string; htmlFor?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="label" htmlFor={htmlFor}>{label}</label>
+      {children}
+      {hint && <p className="help mt-1.5">{hint}</p>}
+    </div>
+  );
+}
+
+function Toggle({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <p className="m-0 text-[13px] font-medium text-fg">{label}</p>
+        {hint && <p className="help mt-0.5">{hint}</p>}
+      </div>
+      <button type="button" role="switch" aria-checked={checked} aria-label={label} className="switch" onClick={onChange} />
+    </div>
+  );
+}
+
 export default function SettingsTab({
   habits,
   syncError,
@@ -70,12 +105,13 @@ export default function SettingsTab({
   onSave: (changed: HabitDef[]) => void;
   onError: (message: string) => void;
 }) {
+  const uid = useId();
   const [draft, setDraft] = useState<Draft | null>(null);
 
   const active = habits.filter((h) => h.activo).sort((a, b) => a.orden - b.orden);
   const archived = habits.filter((h) => !h.activo);
 
-  const edit = (h: HabitDef) => setDraft({ habit: structuredClone(h), tipo: isChecklist(h) ? 'checklist' : 'opciones', razonesText: h.razones.join(', '), isNew: false });
+  const edit = (h: HabitDef) => setDraft({ habit: toDraft(h), tipo: isChecklist(h) ? 'checklist' : 'opciones', razonesText: h.razones.join(', '), isNew: false });
   const create = () => setDraft({ habit: blankHabit(Math.max(-1, ...habits.map((h) => h.orden)) + 1), tipo: 'opciones', razonesText: '', isNew: true });
 
   // Swap with the neighbour inside the same block (blocks are ordered on
@@ -95,211 +131,235 @@ export default function SettingsTab({
     setDraft(null);
   };
 
+  // -------------------------------------------------------------------------
+  // Editor
+  // -------------------------------------------------------------------------
   if (draft) {
     const h = draft.habit;
     const setH = (p: Partial<HabitDef>) => setDraft({ ...draft, habit: { ...h, ...p } });
     const setOpt = (i: number, p: Partial<HabitOption>) => setH({ opciones: h.opciones.map((o, j) => (j === i ? { ...o, ...p } : o)) });
+    const blockHint = BLOQUES.find((b) => b.id === h.bloque)?.hint;
 
     return (
-      <>
-        <div className="text-[11px] text-[#8a8a8a] tracking-[1.5px] uppercase mb-4">
-          GESTOR // {draft.isNew ? 'NUEVO HÁBITO' : 'EDITAR ' + h.nombre}
-        </div>
-        <div className={`${cardClass} flex flex-col gap-4`}>
-          <div>
-            <label className={labelClass}>NOMBRE</label>
-            <input className={inputClass} placeholder="Ej. Leer 20 min" value={h.nombre} onChange={(e) => setH({ nombre: e.target.value })} />
-          </div>
-          <div>
-            <label className={labelClass}>PREGUNTA (OPCIONAL)</label>
-            <input className={inputClass} placeholder="Ej. ¿Leí antes de dormir?" value={h.pregunta} onChange={(e) => setH({ pregunta: e.target.value })} />
-          </div>
-          <div>
-            <label className={labelClass}>POR QUÉ (OPCIONAL)</label>
-            <input className={inputClass} placeholder="Ej. La mente también se entrena." value={h.porQue} onChange={(e) => setH({ porQue: e.target.value })} />
-          </div>
+      <div className="anim-rise">
+        <h1 className="page-title">{draft.isNew ? 'Nuevo hábito' : 'Editar hábito'}</h1>
+        <p className="page-sub">{draft.isNew ? 'Define qué vas a registrar cada día.' : sentence(h.nombre)}</p>
 
-          <div>
-            <label className={labelClass}>BLOQUE DEL DÍA</label>
-            <div className="grid grid-cols-2 gap-1.5">
-              {BLOQUES.map((b) => (
-                <button key={b.id} className={viewBtnClass(h.bloque === b.id)} onClick={() => setH({ bloque: b.id as Bloque })}>
-                  {b.label}
-                </button>
-              ))}
-            </div>
-            <div className="text-[10px] text-[#7d7d7d] mt-1.5">{BLOQUES.find((b) => b.id === h.bloque)?.hint}</div>
-          </div>
-
-          <div>
-            <label className={labelClass}>TIPO DE RESPUESTA</label>
-            <div className="flex gap-1.5">
-              <button className={viewBtnClass(draft.tipo === 'opciones')} onClick={() => setDraft({ ...draft, tipo: 'opciones' })}>OPCIONES</button>
-              <button className={viewBtnClass(draft.tipo === 'checklist')} onClick={() => setDraft({ ...draft, tipo: 'checklist' })}>CHECKLIST</button>
-            </div>
-          </div>
-
-          {draft.tipo === 'opciones' ? (
-            <div>
-              <label className={labelClass}>OPCIONES — MARCA CUÁLES CUENTAN COMO CUMPLIDO</label>
-              <div className="flex flex-col gap-2">
-                {h.opciones.map((o, i) => (
-                  <div key={o.id} className="flex gap-2 items-center">
-                    <input
-                      className={inputClass}
-                      value={o.label}
-                      placeholder="Texto del botón"
-                      // Focus a freshly added row so typing goes into it, not into the "add" button.
-                      autoFocus={!o.label && i === h.opciones.length - 1}
-                      onChange={(e) => setOpt(i, { label: e.target.value })}
-                    />
-                    <button
-                      className={`${smallBtnClass} shrink-0 w-[92px]`}
-                      style={o.ok ? { color: '#f7931a', borderColor: '#f7931a' } : { color: '#ff3333', borderColor: '#ff3333' }}
-                      onClick={() => setOpt(i, { ok: !o.ok })}
-                    >
-                      {o.ok ? '✓ CUMPLE' : '✗ FALLA'}
-                    </button>
-                    <button
-                      className={`${smallBtnClass} shrink-0 text-[#7d7d7d] border-[#2a2a2a]`}
-                      onClick={() => setH({ opciones: h.opciones.filter((_, j) => j !== i) })}
-                      aria-label="Quitar opción"
-                    >
-                      ✕
-                    </button>
-                  </div>
+        <div className="mt-6 flex flex-col gap-3">
+          <section className="card flex flex-col gap-5">
+            <h2 className="section-title">General</h2>
+            <Field label="Nombre" htmlFor={`${uid}-nombre`}>
+              <input id={`${uid}-nombre`} className="input" placeholder="Ej. Leer 20 min" value={h.nombre} onChange={(e) => setH({ nombre: e.target.value })} />
+            </Field>
+            <Field label="Pregunta (opcional)" htmlFor={`${uid}-pregunta`}>
+              <input id={`${uid}-pregunta`} className="input" placeholder="Ej. ¿Leí antes de dormir?" value={h.pregunta} onChange={(e) => setH({ pregunta: e.target.value })} />
+            </Field>
+            <Field label="Por qué lo haces (opcional)" htmlFor={`${uid}-porque`}>
+              <input id={`${uid}-porque`} className="input" placeholder="Ej. La mente también se entrena." value={h.porQue} onChange={(e) => setH({ porQue: e.target.value })} />
+            </Field>
+            <Field label="Bloque del día" hint={blockHint}>
+              <div className="seg grid w-full grid-cols-2 sm:grid-cols-4" role="group" aria-label="Bloque del día">
+                {BLOQUES.map((b) => (
+                  <button key={b.id} type="button" aria-pressed={h.bloque === b.id} className={`${segClass(h.bloque === b.id)} h-8 px-2`} onClick={() => setH({ bloque: b.id as Bloque })}>
+                    {b.label}
+                  </button>
                 ))}
-                <button
-                  className={`${smallBtnClass} text-[#8a8a8a] border-[#2a2a2a] py-2`}
-                  onClick={() => setH({ opciones: [...h.opciones, { id: 'o' + Date.now().toString(36), label: '', ok: false }] })}
-                >
-                  + AGREGAR OPCIÓN
-                </button>
               </div>
-            </div>
-          ) : (
-            <div>
-              <label className={labelClass}>SUBTAREAS — SE CUMPLE SI HACES TODAS</label>
-              <div className="flex flex-col gap-2">
-                {h.subtareas.map((t, i) => (
-                  <div key={i} className="flex gap-2 items-center">
-                    <input
-                      className={inputClass}
-                      value={t}
-                      placeholder="Ej. Hielo en los ojos"
-                      autoFocus={!t && i === h.subtareas.length - 1}
-                      onChange={(e) => setH({ subtareas: h.subtareas.map((x, j) => (j === i ? e.target.value : x)) })}
-                    />
-                    <button
-                      className={`${smallBtnClass} shrink-0 text-[#7d7d7d] border-[#2a2a2a]`}
-                      onClick={() => setH({ subtareas: h.subtareas.filter((_, j) => j !== i) })}
-                      aria-label="Quitar subtarea"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-                <button className={`${smallBtnClass} text-[#8a8a8a] border-[#2a2a2a] py-2`} onClick={() => setH({ subtareas: [...h.subtareas, ''] })}>
-                  + AGREGAR SUBTAREA
-                </button>
-              </div>
-            </div>
-          )}
+            </Field>
+          </section>
 
-          {draft.tipo === 'opciones' && (
-            <>
-              <div>
-                <label className={labelClass}>RAZONES DE FALLO (SEPARADAS POR COMA)</label>
+          <section className="card flex flex-col gap-5">
+            <h2 className="section-title">Respuesta</h2>
+            <Field label="Tipo de respuesta">
+              <div className="seg w-full" role="group" aria-label="Tipo de respuesta">
+                <button type="button" aria-pressed={draft.tipo === 'opciones'} className={segClass(draft.tipo === 'opciones')} onClick={() => setDraft({ ...draft, tipo: 'opciones' })}>Opciones</button>
+                <button type="button" aria-pressed={draft.tipo === 'checklist'} className={segClass(draft.tipo === 'checklist')} onClick={() => setDraft({ ...draft, tipo: 'checklist' })}>Checklist</button>
+              </div>
+            </Field>
+
+            {draft.tipo === 'opciones' ? (
+              <Field label="Opciones" hint="Marca cuáles cuentan como cumplido.">
+                <div className="flex flex-col gap-2">
+                  {h.opciones.map((o, i) => (
+                    <div key={o.id} className="flex items-center gap-2">
+                      <input
+                        className="input min-w-0 flex-1"
+                        value={o.label}
+                        placeholder="Texto del botón"
+                        aria-label={`Opción ${i + 1}`}
+                        // Focus a freshly added row so typing goes into it, not into the "add" button.
+                        autoFocus={!o.label && i === h.opciones.length - 1}
+                        onChange={(e) => setOpt(i, { label: e.target.value })}
+                      />
+                      <button
+                        type="button"
+                        className={`btn btn-sm w-[88px] shrink-0 ${o.ok ? 'btn-accent' : 'btn-danger'}`}
+                        aria-pressed={o.ok}
+                        onClick={() => setOpt(i, { ok: !o.ok })}
+                      >
+                        {o.ok ? 'Cumple' : 'Falla'}
+                      </button>
+                      <button type="button" className="btn btn-secondary btn-sm btn-icon shrink-0" onClick={() => setH({ opciones: h.opciones.filter((_, j) => j !== i) })} aria-label="Quitar opción">
+                        <X size={14} aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm self-start"
+                    onClick={() => setH({ opciones: [...h.opciones, { id: 'o' + Date.now().toString(36), label: '', ok: false }] })}
+                  >
+                    <Plus size={14} aria-hidden="true" />
+                    Agregar opción
+                  </button>
+                </div>
+              </Field>
+            ) : (
+              <Field label="Subtareas" hint="Se cumple si haces todas.">
+                <div className="flex flex-col gap-2">
+                  {h.subtareas.map((t, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        className="input min-w-0 flex-1"
+                        value={t}
+                        placeholder="Ej. Hielo en los ojos"
+                        aria-label={`Subtarea ${i + 1}`}
+                        autoFocus={!t && i === h.subtareas.length - 1}
+                        onChange={(e) => setH({ subtareas: h.subtareas.map((x, j) => (j === i ? e.target.value : x)) })}
+                      />
+                      <button type="button" className="btn btn-secondary btn-sm btn-icon shrink-0" onClick={() => setH({ subtareas: h.subtareas.filter((_, j) => j !== i) })} aria-label="Quitar subtarea">
+                        <X size={14} aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                  <button type="button" className="btn btn-secondary btn-sm self-start" onClick={() => setH({ subtareas: [...h.subtareas, ''] })}>
+                    <Plus size={14} aria-hidden="true" />
+                    Agregar subtarea
+                  </button>
+                </div>
+              </Field>
+            )}
+
+            {draft.tipo === 'opciones' && (
+              <Field label="Razones de fallo" htmlFor={`${uid}-razones`} hint="Separadas por coma.">
                 <input
-                  className={inputClass}
+                  id={`${uid}-razones`}
+                  className="input"
                   placeholder="Ej. Cansancio, Se me olvidó, Pereza"
                   value={draft.razonesText}
                   onChange={(e) => setDraft({ ...draft, razonesText: e.target.value })}
                 />
-              </div>
-              <div className="flex gap-2">
-                <button className={btnClass(h.razonObligatoria, 'green')} onClick={() => setH({ razonObligatoria: !h.razonObligatoria })}>
-                  {h.razonObligatoria ? '✓ ' : ''}RESPUESTA Y RAZÓN OBLIGATORIAS
-                </button>
-              </div>
-            </>
-          )}
-          <div className="flex gap-2">
-            <button className={btnClass(h.conNota, 'green')} onClick={() => setH({ conNota: !h.conNota })}>
-              {h.conNota ? '✓ ' : ''}CAMPO DE NOTA
-            </button>
-          </div>
+              </Field>
+            )}
+          </section>
 
-          <div className="flex gap-2 mt-1">
-            <button className={`${smallBtnClass} flex-1 py-[11px] text-[#8a8a8a] border-[#2a2a2a]`} onClick={() => setDraft(null)}>CANCELAR</button>
-            <button className={`${primaryBtnClass} flex-1`} onClick={save}>GUARDAR</button>
+          <section className="card flex flex-col gap-5">
+            <h2 className="section-title">Opciones avanzadas</h2>
+            {draft.tipo === 'opciones' && (
+              <Toggle
+                label="Respuesta y razón obligatorias"
+                hint="No podrás cerrar el día sin responder, ni fallar sin explicar por qué."
+                checked={h.razonObligatoria}
+                onChange={() => setH({ razonObligatoria: !h.razonObligatoria })}
+              />
+            )}
+            <Toggle label="Campo de nota" hint="Añade un campo de texto libre a la tarjeta." checked={h.conNota} onChange={() => setH({ conNota: !h.conNota })} />
+          </section>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" className="btn btn-secondary" onClick={() => setDraft(null)}>Cancelar</button>
+            <button type="button" className="btn btn-primary" onClick={save}>Guardar hábito</button>
           </div>
         </div>
-      </>
+      </div>
     );
   }
 
+  // -------------------------------------------------------------------------
+  // List
+  // -------------------------------------------------------------------------
   return (
-    <>
-      <div className="text-[11px] text-[#8a8a8a] tracking-[1.5px] uppercase mb-4">GESTOR // HÁBITOS</div>
+    <div className="anim-rise">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="page-title">Configuración</h1>
+          <p className="page-sub">Gestor de hábitos</p>
+        </div>
+        <button type="button" className="btn btn-primary shrink-0" onClick={create}>
+          <Plus size={16} aria-hidden="true" />
+          Nuevo hábito
+        </button>
+      </div>
 
       {syncError && (
-        <div className="bg-[#160707] border border-[#ff3333] text-[#ff8080] text-[11px] leading-[1.5] rounded-sm p-[14px_16px] mb-3.5">
-          SIN SINCRONIZAR CON SUPABASE: {syncError}. Los cambios se guardan en este dispositivo.
+        <div className="alert alert-danger mt-6" role="alert">
+          <CircleAlert size={18} className="mt-px shrink-0" aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="m-0 font-medium">Sin sincronizar con Supabase</p>
+            <p className="m-0 mt-0.5 break-words text-[12px] opacity-90">{syncError}. Los cambios se guardan en este dispositivo.</p>
+          </div>
         </div>
       )}
 
-      <button className={`${primaryBtnClass} mb-5`} onClick={create}>+ NUEVO HÁBITO</button>
+      <div className="mt-8 flex flex-col gap-8">
+        {BLOQUES.map((b) => {
+          const list = active.filter((h) => h.bloque === b.id);
+          return (
+            <section key={b.id}>
+              <h2 className="section-title">{b.label}</h2>
+              <p className="help mb-3 mt-0.5">{b.hint}</p>
+              {list.length === 0 ? (
+                <p className="empty m-0 !py-5">Sin hábitos en este bloque</p>
+              ) : (
+                <ul className="card m-0 list-none divide-y divide-line overflow-hidden p-0">
+                  {list.map((h, i) => (
+                    <li key={h.id} className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5">
+                      <div className="min-w-[160px] flex-1">
+                        <p className="m-0 truncate text-[14px] font-medium text-fg">{sentence(h.nombre)}</p>
+                        <p className="help m-0 truncate">
+                          {isChecklist(h) ? `Checklist · ${h.subtareas.length} subtareas` : h.opciones.map((o) => sentence(o.label)).join(' · ')}
+                        </p>
+                      </div>
+                      <div className="ml-auto flex items-center gap-2">
+                        <button type="button" className="btn btn-secondary btn-sm btn-icon" disabled={i === 0} onClick={() => move(h, -1)} aria-label={`Subir ${sentence(h.nombre)}`}>
+                          <ArrowUp size={14} aria-hidden="true" />
+                        </button>
+                        <button type="button" className="btn btn-secondary btn-sm btn-icon" disabled={i === list.length - 1} onClick={() => move(h, 1)} aria-label={`Bajar ${sentence(h.nombre)}`}>
+                          <ArrowDown size={14} aria-hidden="true" />
+                        </button>
+                        <button type="button" className="btn btn-accent btn-sm" onClick={() => edit(h)}>Editar</button>
+                        <button type="button" className="btn btn-danger btn-sm" onClick={() => onSave([{ ...h, activo: false }])}>Quitar</button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          );
+        })}
 
-      {BLOQUES.map((b) => {
-        const list = active.filter((h) => h.bloque === b.id);
-        return (
-          <div key={b.id} className="mb-5">
-            <div className="text-[11px] text-[#f7931a] tracking-wide">{b.label}</div>
-            <div className="text-[10px] text-[#7d7d7d] mb-2">{b.hint}</div>
-            {list.length === 0 && <div className="text-[11px] text-[#666666] italic">Sin hábitos</div>}
-            <div className="flex flex-col gap-2">
-              {list.map((h, i) => (
-                <div key={h.id} className="bg-[#111111] border border-[#232323] rounded-sm p-3 flex flex-col gap-2.5">
-                  <div className="min-w-0">
-                    <div className="text-[13px] text-[#e5e5e5] truncate">{h.nombre}</div>
-                    <div className="text-[10px] text-[#7d7d7d] truncate">
-                      {isChecklist(h) ? `CHECKLIST · ${h.subtareas.length} subtareas` : h.opciones.map((o) => o.label).join(' / ')}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button className={`${smallBtnClass} text-[#8a8a8a] border-[#2a2a2a] disabled:opacity-30`} disabled={i === 0} onClick={() => move(h, -1)} aria-label="Subir">↑</button>
-                    <button className={`${smallBtnClass} text-[#8a8a8a] border-[#2a2a2a] disabled:opacity-30`} disabled={i === list.length - 1} onClick={() => move(h, 1)} aria-label="Bajar">↓</button>
-                    <div className="flex-1" />
-                    <button className={`${smallBtnClass} text-[#f7931a] border-[#3a2a12]`} onClick={() => edit(h)}>EDITAR</button>
-                    <button className={`${smallBtnClass} text-[#ff8080] border-[#3a1e1e]`} onClick={() => onSave([{ ...h, activo: false }])}>QUITAR</button>
-                  </div>
-                </div>
+        {archived.length > 0 && (
+          <section>
+            <h2 className="section-title">Archivados <span className="font-normal text-fg-3">({archived.length})</span></h2>
+            <p className="help mb-3 mt-0.5">No cuentan en el día, pero su historial se conserva.</p>
+            <ul className="card m-0 list-none divide-y divide-line overflow-hidden p-0">
+              {archived.map((h) => (
+                <li key={h.id} className="flex items-center gap-4 px-4 py-3">
+                  <span className="min-w-0 flex-1 truncate text-[13px] text-fg-3">{sentence(h.nombre)}</span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm shrink-0"
+                    onClick={() => onSave([{ ...h, activo: true, orden: Math.max(...habits.map((x) => x.orden)) + 1 }])}
+                  >
+                    <ArchiveRestore size={14} aria-hidden="true" />
+                    Restaurar
+                  </button>
+                </li>
               ))}
-            </div>
-          </div>
-        );
-      })}
-
-      {archived.length > 0 && (
-        <div className="mt-7">
-          <div className="text-[11px] text-[#7d7d7d] tracking-wide mb-1">ARCHIVADOS ({archived.length})</div>
-          <div className="text-[10px] text-[#666666] mb-2">No cuentan en el día, pero su historial se conserva.</div>
-          <div className="flex flex-col gap-2">
-            {archived.map((h) => (
-              <div key={h.id} className="bg-[#0d0d0d] border border-[#1c1c1c] rounded-sm px-3 py-2.5 flex items-center gap-2">
-                <span className="flex-1 text-[12px] text-[#7d7d7d] truncate">{h.nombre}</span>
-                <button
-                  className={`${smallBtnClass} text-[#8a8a8a] border-[#2a2a2a]`}
-                  onClick={() => onSave([{ ...h, activo: true, orden: Math.max(...habits.map((x) => x.orden)) + 1 }])}
-                >
-                  RESTAURAR
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </>
+            </ul>
+          </section>
+        )}
+      </div>
+    </div>
   );
 }
