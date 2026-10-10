@@ -1,8 +1,9 @@
 import { useEffect, useId, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Check, ChevronDown, ChevronUp, X } from 'lucide-react';
-import { blockOf, emojiFor, emptyEntry, isChecklist, isFailed, isOk } from '../habits';
+import { emptyEntry, isChecklist, isFailed, isOk } from '../habits';
 import type { HabitDef, HabitEntry, SubStatus } from '../habits';
+import { habitIcon } from '../icons';
 import { sentence } from '../lib/text';
 import { choiceClass, chipClass } from '../ui';
 
@@ -31,8 +32,7 @@ export default function HabitCard({
   const ok = !failed && isOk(habit, entry);
   const showReasons = failed && !isChecklist(habit);
   const name = sentence(habit.nombre);
-  const emoji = emojiFor(habit);
-  const tile = blockOf(habit.bloque).color;
+  const Icon = habitIcon(habit);
 
   const [collapsed, setCollapsed] = useState(ok);
   useEffect(() => {
@@ -73,8 +73,8 @@ export default function HabitCard({
           aria-expanded={false}
           onClick={() => setCollapsed(false)}
         >
-          <span className="emoji-tile emoji-tile-sm" style={{ '--tile': '#34d399' } as CSSProperties} aria-hidden="true">
-            {emoji}
+          <span className="icon-tile icon-tile-sm" style={{ '--tile': '#34d399' } as CSSProperties} aria-hidden="true">
+            <Icon size={17} strokeWidth={1.8} />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[14px] font-medium text-fg">{name}</span>
@@ -99,14 +99,14 @@ export default function HabitCard({
       <div className="flex items-start gap-3">
         {/* Emoji tile; a check / cross badge appears once the habit is answered. */}
         <span
-          className="emoji-tile"
-          style={{ '--tile': failed ? '#f43f5e' : ok ? '#34d399' : tile } as CSSProperties}
+          className="icon-tile"
+          style={{ '--tile': failed ? '#f43f5e' : ok ? '#34d399' : '#38bdf8' } as CSSProperties}
           role="img"
           aria-label={`${failed ? 'Fallado' : ok ? 'Cumplido' : 'Pendiente'} · hábito ${number}`}
         >
-          <span aria-hidden="true">{emoji}</span>
+          <Icon size={21} strokeWidth={1.8} aria-hidden="true" />
           {(failed || ok) && (
-            <span className="emoji-mark anim-pop" style={{ background: failed ? 'var(--grad-bad)' : 'var(--grad-good)' }} aria-hidden="true">
+            <span className="icon-mark anim-pop" style={{ background: failed ? 'var(--grad-bad)' : 'var(--grad-good)' }} aria-hidden="true">
               {failed ? <X size={11} strokeWidth={3.5} /> : <Check size={11} strokeWidth={3.5} />}
             </span>
           )}
@@ -114,7 +114,7 @@ export default function HabitCard({
         <div className="min-w-0 flex-1">
           <h3 className="card-title">{name}</h3>
           {habit.pregunta && <p className="m-0 mt-0.5 text-[13px] leading-5 text-fg-2">{sentence(habit.pregunta)}</p>}
-          {habit.porQue && <p className="help mt-1.5">💡 {habit.porQue}</p>}
+          {habit.porQue && <p className="help mt-1.5">{habit.porQue}</p>}
         </div>
         {ok && (
           <button type="button" className="btn btn-secondary btn-sm btn-icon -mr-1 -mt-1 shrink-0" aria-label="Contraer" onClick={() => setCollapsed(true)}>
@@ -158,7 +158,7 @@ export default function HabitCard({
       {showReasons && (
         <div className="mt-5 border-t border-line pt-4">
           <p className="m-0 mb-3 text-[12px] font-medium text-danger-fg">
-            🤔 ¿Qué pasó?{habit.razonObligatoria && <span className="ml-1.5 font-normal text-fg-3">(obligatorio)</span>}
+            ¿Qué pasó?{habit.razonObligatoria && <span className="ml-1.5 font-normal text-fg-3">(obligatorio)</span>}
           </p>
           <div className="flex flex-wrap gap-2">
             {habit.razones.map((label) => (

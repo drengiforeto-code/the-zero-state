@@ -55,10 +55,10 @@ export default function TimeReality() {
 
   const left = Math.max(0, end - now.getTime());
   const units = [
-    { value: Math.floor(left / DAY_MS), label: 'días', color: '#f472b6' },
-    { value: Math.floor(left / 3_600_000) % 24, label: 'horas', color: '#a78bfa' },
-    { value: Math.floor(left / 60_000) % 60, label: 'min', color: '#22d3ee' },
-    { value: Math.floor(left / 1000) % 60, label: 'seg', color: '#fbbf24' },
+    { value: Math.floor(left / DAY_MS), label: 'días', color: '#38d0ff' },
+    { value: Math.floor(left / 3_600_000) % 24, label: 'horas', color: '#38bdf8' },
+    { value: Math.floor(left / 60_000) % 60, label: 'min', color: '#38bdf8' },
+    { value: Math.floor(left / 1000) % 60, label: 'seg', color: '#38bdf8' },
   ];
   const pct = fmtPct.format(elapsed * 100);
 
@@ -74,7 +74,7 @@ export default function TimeReality() {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="eyebrow m-0 flex items-center gap-1.5">
-            ⏳ Realidad temporal
+            Realidad temporal
           </p>
           <p className="m-0 mt-2.5 text-[24px] font-bold leading-7 tracking-tight text-fg">
             {weekday}, {dayMonth}
@@ -89,13 +89,13 @@ export default function TimeReality() {
       </div>
 
       <div className="mt-5">
-        <p className="help m-0 mb-2">⏰ Para que se acabe el {y}</p>
+        <p className="help m-0 mb-2">Para que se acabe el {y}</p>
         <div className="grid grid-cols-4 gap-2" role="timer" aria-label={`Faltan ${units[0].value} días para que termine el año`}>
           {units.map((u, i) => (
             <div
               key={u.label}
               className="rounded-control border px-2 py-3 text-center"
-              style={{ background: `color-mix(in srgb, ${u.color} 12%, transparent)`, borderColor: `color-mix(in srgb, ${u.color} 40%, transparent)` }}
+              style={{ background: 'var(--color-sunken)', borderColor: 'var(--color-line)' }}
             >
               <span
                 className="block text-[26px] font-bold leading-none tracking-tight tabular-nums"
@@ -116,13 +116,13 @@ export default function TimeReality() {
         <div className="mt-2 flex flex-wrap justify-between gap-x-4 gap-y-1 text-[12px] text-fg-3">
           <span><span className="font-semibold tabular-nums text-fg-2">{pct}%</span> del {y} ya se fue</span>
           <span className="tabular-nums">
-            🎉 {weekendsLeft(now)} fines de semana · ≈ {groupThousands(Math.round((left / 3_600_000) * (AWAKE_HOURS / 24)))} horas útiles (despierto)
+            {weekendsLeft(now)} fines de semana · ≈ {groupThousands(Math.round((left / 3_600_000) * (AWAKE_HOURS / 24)))} horas útiles (despierto)
           </span>
         </div>
       </div>
 
       <div className="mt-5 flex items-start gap-3 border-t border-line pt-4">
-        <p className="m-0 min-w-0 flex-1 border-l-4 border-pink pl-3 text-[15px] font-semibold leading-6 text-fg">🥊 {punch}</p>
+        <p className="m-0 min-w-0 flex-1 border-l-4 border-pink pl-3 text-[15px] font-semibold leading-6 text-fg">{punch}</p>
         <button type="button" className="btn btn-secondary btn-sm btn-icon shrink-0" aria-label="Otra frase" title="Otra frase" onClick={() => setShift(shift + 1)}>
           <RefreshCw size={14} aria-hidden="true" />
         </button>

@@ -9,9 +9,8 @@ export default function Logo({ size = 24, stroke = 1.5, animate = false }: { siz
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true">
       <defs>
         <linearGradient id={id} x1="8" y1="44" x2="40" y2="4" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#8b5cf6" />
-          <stop offset="0.55" stopColor="#d946ef" />
-          <stop offset="1" stopColor="#fb7185" />
+          <stop stopColor="#0a9bff" />
+          <stop offset="1" stopColor="#38d0ff" />
         </linearGradient>
       </defs>
       <ellipse className={animate ? 'logo-ring' : undefined} cx="24" cy="24" rx="12.5" ry="18.5" stroke={`url(#${id})`} strokeWidth={stroke} strokeLinecap="round" pathLength={100} />
