@@ -1,4 +1,4 @@
-# The Sovereign OS
+# Zero State
 
 Auditoría diaria de disciplina personal: tracker de hábitos, reportes con tendencias y un gestor de hábitos extra.
 
@@ -7,6 +7,7 @@ Auditoría diaria de disciplina personal: tracker de hábitos, reportes con tend
 - [Vite](https://vite.dev) + React + TypeScript
 - [Tailwind CSS v4](https://tailwindcss.com) (`@tailwindcss/vite`)
 - [lucide-react](https://lucide.dev) para iconos
+- Tipografía [Geist](https://fonts.google.com/specimen/Geist); estilos base y componentes en `src/index.css` (tokens de color y radios en `@theme`)
 
 ## Desarrollo
 
