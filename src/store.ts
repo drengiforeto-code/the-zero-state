@@ -44,9 +44,8 @@ export interface AppState {
   // the local cache used until it loads, or if it's unreachable.
   habits: HabitDef[];
   habitsSynced: boolean; habitsError: string | null;
-  // Set once the "last night" habits were moved to the start block (see
-  // moveNightHabitsToInicio) so the move never runs twice.
-  nightHabitsMoved: boolean;
+  // Last habit layout migration applied (see migrateHabitLayout).
+  habitLayout: number;
   // Today's answers, keyed by habit id.
   entries: Record<string, HabitEntry>;
   dayStarted: boolean; dayStartTime: string;
@@ -69,7 +68,7 @@ function buildInitialState(): AppState {
   return {
     tab: 'tracker',
     habits: DEFAULT_HABITS,
-    habitsSynced: false, habitsError: null, nightHabitsMoved: false,
+    habitsSynced: false, habitsError: null, habitLayout: 0,
     entries: {},
     dayStarted: false, dayStartTime: '',
     closed: false, closedTime: '', summary: null, summaryDismissed: false,
@@ -160,10 +159,15 @@ export const useAppStore = create<AppStore>()(
     }),
     {
       name: 'sovereign-os-storage-v3',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
       migrate: (persisted, version) => {
         if (version === 0) return migrateV0((persisted ?? {}) as LegacyState) as AppStore;
+        if (version === 1) {
+          // v1 kept a boolean for the first layout migration.
+          const { nightHabitsMoved, ...rest } = (persisted ?? {}) as Record<string, unknown>;
+          return { ...rest, habitLayout: nightHabitsMoved ? 1 : 0 } as unknown as AppStore;
+        }
         return persisted as AppStore;
       },
       partialize: (state) => {

@@ -142,21 +142,21 @@ export const DEFAULT_HABITS: HabitDef[] = [
     razonObligatoria: true, conNota: false,
   },
   {
-    id: 'diet', nombre: 'DIETA', pregunta: '¿COMÍ BIEN HOY?', porQue: 'Tu cuerpo es la base de cualquier disciplina.',
-    bloque: 'dia', orden: 5, activo: true,
+    id: 'diet', nombre: 'DIETA', pregunta: '¿COMÍ BIEN AYER?', porQue: 'Tu cuerpo es la base de cualquier disciplina.',
+    bloque: 'inicio', orden: 5, activo: true,
     opciones: yesNo('COMÍ BIEN', 'COMÍ MAL', 'Combustible limpio, mente clara.', 'Comiste basura y lo sabes. Mañana no hay excusa.'),
     subtareas: [], razones: ['Antojo', 'Poca planificación', 'Evento social', 'Estrés', 'Pereza'],
     razonObligatoria: false, conNota: false,
   },
   {
-    id: 'protein', nombre: 'PROTEÍNA Y CREATINA', pregunta: '¿LAS TOMÉ HOY?', porQue: 'La recuperación real ocurre con los nutrientes, no con la intención.',
-    bloque: 'dia', orden: 6, activo: true,
+    id: 'protein', nombre: 'PROTEÍNA Y CREATINA', pregunta: '¿LAS TOMÉ AYER?', porQue: 'La recuperación real ocurre con los nutrientes, no con la intención.',
+    bloque: 'inicio', orden: 6, activo: true,
     opciones: yesNo('SÍ LAS TOMÉ', 'NO LAS TOMÉ', 'Nutrición cubierta. Tu cuerpo puede recuperarse en serio.', 'No tomaste lo que tu cuerpo necesitaba. Marca por qué.'),
     subtareas: [], razones: ['Se me olvidó', 'No tenía en casa', 'Pereza', 'Prioricé otra cosa'],
     razonObligatoria: false, conNota: false,
   },
   {
-    id: 'minox', nombre: 'MINOXIDIL', pregunta: '¿ME APLIQUÉ HOY?', porQue: 'Los resultados compuestos premian la constancia.',
+    id: 'minox', nombre: 'MINOXIDIL', pregunta: '¿ME APLIQUÉ ANOCHE?', porQue: 'Los resultados compuestos premian la constancia.',
     bloque: 'inicio', orden: 7, activo: true,
     opciones: yesNo('ME APLIQUÉ', 'NO ME APLIQUÉ', 'Constancia silenciosa. Así se construye el resultado.', 'Un día salteado es un día perdido en el espejo.'),
     subtareas: [], razones: ['Se me olvidó', 'Falta de tiempo', 'Pereza', 'No tenía a la mano'],
@@ -185,25 +185,47 @@ export const DEFAULT_HABITS: HabitDef[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// One-off migration: these habits describe last night, so they now belong to
-// the start-of-day block. Only habits still sitting in their old default block
-// are moved — anything the user already relocated by hand is left alone.
+// Habit layout migrations. Habits live in Supabase, so changing the defaults
+// above doesn't touch an existing setup; these steps move existing habits to
+// their new block once (the store remembers the last applied version).
 // ---------------------------------------------------------------------------
 
-const MOVED_TO_INICIO: Record<string, Bloque> = {
-  lookmax: 'manana',
-  minox: 'dia',
-  nofap: 'noche',
-  scroll: 'noche',
-};
+type LayoutStep = (h: HabitDef) => HabitDef;
 
-export function moveNightHabitsToInicio(habits: HabitDef[]): { habits: HabitDef[]; changed: HabitDef[] } {
+const LAYOUT_STEPS: LayoutStep[] = [
+  // v1: habits about last night start the day. Only habits still in their old
+  // default block move, so manual relocations are respected.
+  (h) => {
+    const from: Record<string, Bloque> = { lookmax: 'manana', minox: 'dia', nofap: 'noche', scroll: 'noche' };
+    return from[h.id] === h.bloque ? { ...h, bloque: 'inicio' } : h;
+  },
+  // v2: diet, protein and lookmax are also logged the next morning (asked for
+  // explicitly, so they move wherever they are). Default questions that said
+  // "hoy" now refer to the day before; edited questions are kept.
+  (h) => {
+    if (!['lookmax', 'diet', 'protein', 'minox'].includes(h.id)) return h;
+    const questions: Record<string, [string, string]> = {
+      diet: ['¿COMÍ BIEN HOY?', '¿COMÍ BIEN AYER?'],
+      protein: ['¿LAS TOMÉ HOY?', '¿LAS TOMÉ AYER?'],
+      minox: ['¿ME APLIQUÉ HOY?', '¿ME APLIQUÉ ANOCHE?'],
+    };
+    const q = questions[h.id];
+    const pregunta = q && h.pregunta === q[0] ? q[1] : h.pregunta;
+    const bloque: Bloque = h.id === 'minox' ? h.bloque : 'inicio';
+    return bloque === h.bloque && pregunta === h.pregunta ? h : { ...h, bloque, pregunta };
+  },
+];
+
+export const HABIT_LAYOUT_VERSION = LAYOUT_STEPS.length;
+
+// Applies every step after `fromVersion`; `changed` lists the habits to save.
+export function migrateHabitLayout(habits: HabitDef[], fromVersion: number): { habits: HabitDef[]; changed: HabitDef[] } {
+  const steps = LAYOUT_STEPS.slice(fromVersion);
   const changed: HabitDef[] = [];
   const next = habits.map((h) => {
-    if (MOVED_TO_INICIO[h.id] !== h.bloque) return h;
-    const moved = { ...h, bloque: 'inicio' as Bloque };
-    changed.push(moved);
-    return moved;
+    const out = steps.reduce((acc, step) => step(acc), h);
+    if (out !== h) changed.push(out);
+    return out;
   });
   return { habits: next, changed };
 }
