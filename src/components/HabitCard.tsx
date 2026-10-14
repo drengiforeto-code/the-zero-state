@@ -93,7 +93,7 @@ export default function HabitCard({
   return (
     <section
       className="card"
-      style={failed ? { borderColor: 'var(--color-danger-line)', boxShadow: '0 0 0 1px rgba(244,63,94,0.25), 0 10px 30px -16px rgba(244,63,94,0.6)' } : ok ? { borderColor: 'var(--color-good-line)' } : undefined}
+      style={failed ? { borderColor: 'var(--color-danger-line)', boxShadow: '0 0 0 1px rgba(244,63,94,0.3)' } : ok ? { borderColor: 'var(--color-good-line)' } : undefined}
       aria-label={name}
     >
       <div className="flex items-start gap-3">

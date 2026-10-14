@@ -3,6 +3,8 @@ import { RefreshCw } from 'lucide-react';
 import { TIME_PUNCHES } from '../content';
 
 const DAY_MS = 86_400_000;
+// How often the daily line rotates on its own.
+const PUNCH_MS = 60_000;
 // Hours a typical person is awake per day, for the "hours awake left" figure.
 const AWAKE_HOURS = 16;
 
@@ -45,6 +47,13 @@ function useNow(): Date {
 export default function TimeReality() {
   const now = useNow();
   const [shift, setShift] = useState(0);
+
+  // The line changes by itself every minute; tapping the button restarts that
+  // minute so a line you just asked for isn't swapped right away.
+  useEffect(() => {
+    const id = window.setInterval(() => setShift((n) => n + 1), PUNCH_MS);
+    return () => window.clearInterval(id);
+  }, [shift]);
 
   const y = now.getFullYear();
   const start = new Date(y, 0, 1).getTime();
@@ -122,7 +131,7 @@ export default function TimeReality() {
       </div>
 
       <div className="mt-5 flex items-start gap-3 border-t border-line pt-4">
-        <p className="m-0 min-w-0 flex-1 border-l-4 border-pink pl-3 text-[15px] font-semibold leading-6 text-fg">{punch}</p>
+        <p className="m-0 min-w-0 flex-1 border-l-4 border-pink pl-3 text-[15px] font-semibold leading-6 text-fg anim-fade" key={punch}>{punch}</p>
         <button type="button" className="btn btn-secondary btn-sm btn-icon shrink-0" aria-label="Otra frase" title="Otra frase" onClick={() => setShift(shift + 1)}>
           <RefreshCw size={14} aria-hidden="true" />
         </button>

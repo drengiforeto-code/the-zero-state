@@ -4,6 +4,16 @@ import type { Tab } from '../store';
 import { tabClass, tierColor } from '../ui';
 import Logo from './Logo';
 
+export type SyncState = 'idle' | 'saving' | 'saved' | 'error' | 'off';
+
+const SYNC_LABEL: Record<SyncState, { text: string; color: string }> = {
+  idle: { text: '', color: 'var(--color-fg-3)' },
+  saving: { text: 'Guardando…', color: 'var(--color-fg-3)' },
+  saved: { text: 'Guardado', color: 'var(--color-good)' },
+  error: { text: 'No se pudo guardar', color: 'var(--color-danger-fg)' },
+  off: { text: 'Solo en este dispositivo', color: 'var(--color-fg-3)' },
+};
+
 export interface ProgressSegment {
   id: string;
   state: 'ok' | 'bad' | 'pending';
@@ -24,12 +34,14 @@ export default function AppHeader({
   onTab,
   segments,
   coherence,
+  sync,
 }: {
   tab: Tab;
   onTab: (tab: Tab) => void;
   // Shown only on the tracker tab. `coherence` is 0–1, or null before the day starts.
   segments: ProgressSegment[];
   coherence: number | null;
+  sync: SyncState;
 }) {
   const answered = segments.filter((s) => s.state !== 'pending').length;
   const showStrip = tab === 'tracker' && segments.length > 0;
@@ -39,10 +51,14 @@ export default function AppHeader({
       <header className="mx-auto flex max-w-[680px] items-center gap-2.5 px-4 pb-3 pt-[calc(20px+env(safe-area-inset-top))] sm:px-6">
         <Logo size={30} stroke={2.4} />
         <span className="text-grad text-[15px] font-bold uppercase tracking-[0.22em]">{APP_NAME}</span>
+        <span className="ml-auto flex items-center gap-1.5 text-[12px]" style={{ color: SYNC_LABEL[sync].color }} role="status" aria-live="polite">
+          {sync !== 'idle' && <span className="size-1.5 rounded-full" style={{ background: 'currentColor' }} aria-hidden="true" />}
+          {SYNC_LABEL[sync].text}
+        </span>
       </header>
 
       <div
-        className={`sticky top-0 z-10 bg-[color-mix(in_srgb,var(--page-bg)_86%,transparent)] backdrop-blur-md transition-colors duration-200 ${showStrip ? 'border-b border-line' : 'sm:border-b sm:border-line'}`}
+        className={`sticky top-0 z-10 bg-[var(--page-bg)] transition-colors duration-200 ${showStrip ? 'border-b border-line' : 'sm:border-b sm:border-line'}`}
       >
         <div className="mx-auto max-w-[680px] px-4 sm:px-6">
           <nav className="tabs hidden sm:flex" role="tablist" aria-label="Secciones">
