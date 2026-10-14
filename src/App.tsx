@@ -3,6 +3,9 @@ import type { CSSProperties } from 'react';
 import { useAppStore } from './store';
 import { supabase, supabaseConfigError } from './lib/supabase';
 import { fetchHabits, upsertHabits } from './lib/habitsRepo';
+import { fetchDay, saveDay } from './lib/dayRepo';
+import type { DayDraft } from './lib/dayRepo';
+import type { SyncState } from './components/AppHeader';
 import { dbRowToHistoryRecord, localDateStr, logicalDateStr, longDateLabel } from './lib/history';
 import type { DiaCerradoDetalle, DiaCerradoRow } from './lib/history';
 import { sentence } from './lib/text';
@@ -24,6 +27,12 @@ const NEW_DAY = {
   entries: {},
   closed: false, closedTime: '', closedDate: '', summary: null, summaryDismissed: false,
 };
+
+// Debounce for saving the day in progress to the cloud after each change.
+const DAY_SAVE_MS = 700;
+
+const daySignature = (d: Pick<DayDraft, 'entries' | 'dayStarted' | 'dayStartTime' | 'dayDate' | 'closed' | 'closedTime' | 'closedDate'>) =>
+  JSON.stringify([d.entries, d.dayStarted, d.dayStartTime, d.dayDate, d.closed, d.closedTime, d.closedDate]);
 
 const BOOT_MIN_MS = 1500;
 const BOOT_MAX_MS = 5000;
@@ -138,6 +147,90 @@ export default function App() {
     return true;
   };
 
+  // -------------------------------------------------------------------------
+  // Day in progress → cloud. Every change to the day is stamped and saved
+  // (debounced); on load, and when the app comes back to the foreground, the
+  // newer of the local and cloud copies wins. Without the `dia_actual` table
+  // the app keeps working on this device only.
+  // -------------------------------------------------------------------------
+
+  const [sync, setSync] = useState<SyncState>('idle');
+  const dayReady = useRef(false);
+  const saveTimer = useRef<number | null>(null);
+  const warnedOff = useRef(false);
+  const daySig = daySignature(state);
+  const prevSig = useRef(daySig);
+
+  const snapshotDay = (): DayDraft => {
+    const st = useAppStore.getState();
+    const { entries, dayStarted, dayStartTime, dayDate, closed, closedTime, closedDate, dayUpdatedAt } = st;
+    return { entries, dayStarted, dayStartTime, dayDate, closed, closedTime, closedDate, ts: dayUpdatedAt };
+  };
+
+  const pushDay = async () => {
+    if (saveTimer.current) { window.clearTimeout(saveTimer.current); saveTimer.current = null; }
+    setSync('saving');
+    const error = await saveDay(snapshotDay());
+    if (error) {
+      setSync('error');
+      showToast('No se pudo guardar tu día en la nube: ' + error, 'red');
+      return;
+    }
+    setSync('saved');
+  };
+
+  const syncDay = async () => {
+    const { draft, error } = await fetchDay();
+    dayReady.current = true;
+    if (error) {
+      setSync('off');
+      if (!warnedOff.current) {
+        warnedOff.current = true;
+        showToast('Tu día en curso solo se guarda en este dispositivo: falta la tabla dia_actual en Supabase.', 'red');
+      }
+      return;
+    }
+    const st = useAppStore.getState();
+    const hasLocal = st.dayStarted || st.closed || Object.keys(st.entries).length > 0;
+    // A day saved before stamps existed counts as "now" so it isn't overwritten.
+    if (hasLocal && st.dayUpdatedAt === 0) patch({ dayUpdatedAt: Date.now() });
+    const local = useAppStore.getState().dayUpdatedAt;
+    if (draft && draft.ts > local) {
+      prevSig.current = daySignature(draft);
+      patch({ ...draft, dayUpdatedAt: draft.ts, summary: null, summaryDismissed: true });
+      setSync('saved');
+    } else if (local > (draft?.ts ?? 0)) {
+      await pushDay();
+    } else {
+      setSync('saved');
+    }
+  };
+
+  useEffect(() => {
+    if (prevSig.current === daySig) return;
+    prevSig.current = daySig;
+    patch({ dayUpdatedAt: Date.now() });
+    // Before the first sync, that sync pushes whatever is newer.
+    if (!dayReady.current) return;
+    setSync('saving');
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(pushDay, DAY_SAVE_MS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [daySig]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        if (saveTimer.current) pushDay();
+      } else if (dayReady.current && !saveTimer.current) {
+        syncDay();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Boot screen: stays until the first load settles (never longer than
   // BOOT_MAX_MS, so a slow network can't trap the user) and never shorter than
   // BOOT_MIN_MS, so the logo animation can finish.
@@ -145,7 +238,7 @@ export default function App() {
 
   useEffect(() => {
     const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
-    const firstLoad = Promise.race([Promise.allSettled([fetchHistory(), loadHabits()]), wait(BOOT_MAX_MS)]);
+    const firstLoad = Promise.race([Promise.allSettled([fetchHistory(), loadHabits(), syncDay()]), wait(BOOT_MAX_MS)]);
     Promise.all([firstLoad, wait(BOOT_MIN_MS)]).then(() => {
       setBoot('leaving');
       window.setTimeout(() => setBoot('gone'), 450);
@@ -346,7 +439,7 @@ export default function App() {
       className="app-bg min-h-screen text-fg transition-colors duration-200"
       style={{ '--page-bg': s.flash ? '#2a0a14' : '#070c16' } as CSSProperties}
     >
-      <AppHeader tab={s.tab} onTab={(tab) => patch({ tab })} segments={segments} coherence={s.dayStarted ? todayRatio : null} />
+      <AppHeader tab={s.tab} onTab={(tab) => patch({ tab })} segments={segments} coherence={s.dayStarted ? todayRatio : null} sync={sync} />
 
       <main className="mx-auto max-w-[680px] px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-8 sm:px-6">
         {s.tab === 'tracker' && (

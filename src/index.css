@@ -512,9 +512,7 @@ button {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-    background: color-mix(in srgb, var(--page-bg, var(--color-bg)) 88%, transparent);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
+    background: var(--page-bg, var(--color-bg));
     border-top: 1px solid var(--color-line);
   }
   .bottom-tab {
@@ -592,6 +590,27 @@ button {
       radial-gradient(420px 220px at 0% 0%, rgba(14, 165, 255, 0.32), transparent 70%),
       radial-gradient(380px 220px at 100% 100%, rgba(56, 208, 255, 0.14), transparent 70%),
       var(--color-surface);
+  }
+
+  /* ---- Fold / unfold ---------------------------------------------------- */
+  .fold {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.2s ease;
+  }
+  .fold[data-open='true'] {
+    grid-template-rows: 1fr;
+  }
+  .fold-inner {
+    min-height: 0;
+    overflow: hidden;
+    /* Room so focus rings and card borders aren't clipped by the fold. */
+    padding: 4px;
+    margin: -4px;
+  }
+  .fold[data-open='false'] > .fold-inner {
+    visibility: hidden;
+    transition: visibility 0s linear 0.2s;
   }
 
   /* ---- Feedback --------------------------------------------------------- */

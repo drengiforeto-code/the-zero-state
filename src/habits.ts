@@ -106,7 +106,7 @@ export const DEFAULT_HABITS: HabitDef[] = [
     id: 'sleep', nombre: 'DORMIR', pregunta: '¿DESCANSÉ REALMENTE BIEN?', porQue: 'Sin descanso real ninguna disciplina se sostiene.',
     bloque: 'inicio', orden: 0, activo: true,
     opciones: yesNo('DESCANSÉ BIEN', 'DESCANSÉ MAL', 'Descanso real. Hoy operas con ventaja.', 'Mal descanso. Encuentra el vector antes de que te corrija a ti.'),
-    subtareas: [], razones: ['Estrés', 'Pantallas antes de dormir', 'Ruido o incomodidad', 'Cafeína o alcohol', 'Pensamientos acelerados'],
+    subtareas: [], razones: ['Dolor físico', 'Estrés', 'Pantallas antes de dormir', 'Ruido o incomodidad', 'Cafeína o alcohol', 'Pensamientos acelerados'],
     razonObligatoria: true, conNota: false,
   },
   {
@@ -118,7 +118,7 @@ export const DEFAULT_HABITS: HabitDef[] = [
   },
   {
     id: 'lookmax', nombre: 'LOOKMAX', pregunta: '', porQue: 'Los detalles son la diferencia entre bueno y memorable.',
-    bloque: 'inicio', orden: 2, activo: true,
+    bloque: 'noche', orden: 2, activo: true,
     opciones: [], subtareas: ['HIELO EN LOS OJOS', 'EJERCICIO DE JAWLINE', 'EJERCICIO DE OJOS'], razones: [],
     razonObligatoria: false, conNota: false,
   },
@@ -216,6 +216,12 @@ const LAYOUT_STEPS: LayoutStep[] = [
     const bloque: Bloque = h.id === 'minox' ? h.bloque : 'inicio';
     return bloque === h.bloque && pregunta === h.pregunta ? h : { ...h, bloque, pregunta };
   },
+  // v3: "Dolor físico" (ankylosing spondylitis) joins the reasons for a bad
+  // night's sleep. Added once; a custom list that already has it is left alone.
+  (h) => (h.id !== 'sleep' || h.razones.some((r) => /dolor/i.test(r)) ? h : { ...h, razones: ['Dolor físico', ...h.razones] }),
+  // v4: Lookmax is done at the end of the day, so it closes the day (block
+  // 'noche') instead of describing the day before.
+  (h) => (h.id === 'lookmax' && h.bloque !== 'noche' ? { ...h, bloque: 'noche' } : h),
 ];
 
 export const HABIT_LAYOUT_VERSION = LAYOUT_STEPS.length;

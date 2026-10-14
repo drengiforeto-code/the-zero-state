@@ -1,30 +1,49 @@
 import { useState } from 'react';
-import { Check, CircleAlert, CircleCheck, History, Lock, Pencil, Play, X } from 'lucide-react';
+import { Check, ChevronDown, CircleAlert, CircleCheck, History, Lock, Pencil, Play, X } from 'lucide-react';
 import { BLOQUES, blockOf, isAnswered, isOk } from '../habits';
 import { BLOCK_ICON, habitIcon } from '../icons';
 import type { HabitDef, HabitEntry } from '../habits';
 import { sentence } from '../lib/text';
 import { tierColor } from '../ui';
+import Collapse from './Collapse';
 import HabitCard from './HabitCard';
 import TimeReality from './TimeReality';
 import Ring from './Ring';
 
-function SectionHeader({ block, title, hint, progress }: { block: ReturnType<typeof blockOf>; title?: string; hint?: string; progress?: { done: number; total: number } }) {
-  return (
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="icon-tile icon-tile-sm" aria-hidden="true">{(() => { const I = BLOCK_ICON[block.id]; return <I size={17} strokeWidth={1.8} />; })()}</span>
-        <div className="min-w-0">
-          <h2 className="section-title">{title ?? block.label}</h2>
-          {(hint ?? block.hint) && <p className="help mt-0.5">{hint ?? block.hint}</p>}
-        </div>
-      </div>
-      {progress && (
-        <span className={`badge shrink-0 tabular-nums ${progress.done === progress.total ? 'badge-ok' : ''}`}>
-          {progress.done}/{progress.total}
+// Block title. With `onToggle` it's a button that folds the block's habits.
+function SectionHeader({
+  block, title, hint, progress, open, onToggle,
+}: {
+  block: ReturnType<typeof blockOf>;
+  title?: string;
+  hint?: string;
+  progress?: { done: number; total: number };
+  open?: boolean;
+  onToggle?: () => void;
+}) {
+  const Icon = BLOCK_ICON[block.id];
+  const body = (
+    <>
+      <span className="flex min-w-0 items-center gap-3">
+        <span className="icon-tile icon-tile-sm" aria-hidden="true"><Icon size={17} strokeWidth={1.8} /></span>
+        <span className="min-w-0">
+          <span className="section-title block">{title ?? block.label}</span>
+          {(hint ?? block.hint) && <span className="help mt-0.5 block">{hint ?? block.hint}</span>}
         </span>
-      )}
-    </div>
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        {progress && (
+          <span className={`badge tabular-nums ${progress.done === progress.total ? 'badge-ok' : ''}`}>{progress.done}/{progress.total}</span>
+        )}
+        {onToggle && <ChevronDown size={18} className={`text-fg-3 transition-transform duration-200 ${open ? '' : '-rotate-90'}`} aria-hidden="true" />}
+      </span>
+    </>
+  );
+  const cls = 'mb-3 flex w-full items-center justify-between gap-3 text-left';
+  return onToggle ? (
+    <button type="button" className={`${cls} cursor-pointer border-0 bg-transparent p-0 text-inherit`} aria-expanded={open} onClick={onToggle}>{body}</button>
+  ) : (
+    <div className={cls}>{body}</div>
   );
 }
 
@@ -239,6 +258,10 @@ export default function TrackerView({
   const [saving, setSaving] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
+  // Blocks folded by the user (by block id); everything starts open.
+  const [folded, setFolded] = useState<Record<string, boolean>>({});
+  const toggle = (id: string) => setFolded((f) => ({ ...f, [id]: !f[id] }));
+
   const inicio = habits.filter((h) => h.bloque === 'inicio');
   const inicioTitle = BLOQUES.find((b) => b.id === 'inicio')?.label ?? 'Inicio';
   const rest = BLOQUES.filter((b) => b.id !== 'inicio')
@@ -261,8 +284,12 @@ export default function TrackerView({
       <SectionHeader
         block={block}
         progress={dayStarted ? { done: list.filter((h) => isAnswered(h, entries[h.id])).length, total: list.length } : undefined}
+        open={!folded[block.id]}
+        onToggle={() => toggle(block.id)}
       />
-      <div className="flex flex-col gap-3">{list.map(renderHabit)}</div>
+      <Collapse open={!folded[block.id]}>
+        <div className="flex flex-col gap-3">{list.map(renderHabit)}</div>
+      </Collapse>
     </section>
   ));
 
@@ -320,8 +347,10 @@ export default function TrackerView({
               <div className="flex flex-col gap-8 border-t border-line bg-sunken p-4 sm:p-5">
                 {inicio.length > 0 && (
                   <section>
-                    <SectionHeader block={blockOf('inicio')} />
-                    <div className="flex flex-col gap-3">{inicio.map(renderHabit)}</div>
+                    <SectionHeader block={blockOf('inicio')} open={!folded.inicio} onToggle={() => toggle('inicio')} />
+                    <Collapse open={!folded.inicio}>
+                      <div className="flex flex-col gap-3">{inicio.map(renderHabit)}</div>
+                    </Collapse>
                   </section>
                 )}
                 {restSections}
@@ -396,8 +425,10 @@ export default function TrackerView({
             </StartSummary>
           ) : (
             <section>
-              <SectionHeader block={blockOf('inicio')} hint="Responde cómo llegas al día. Con eso se habilita el resto." />
-              <div className="flex flex-col gap-3">{inicio.map(renderHabit)}</div>
+              <SectionHeader block={blockOf('inicio')} hint="Responde cómo llegas al día. Con eso se habilita el resto." open={!folded.inicio} onToggle={() => toggle('inicio')} />
+              <Collapse open={!folded.inicio}>
+                <div className="flex flex-col gap-3">{inicio.map(renderHabit)}</div>
+              </Collapse>
             </section>
           ))}
 
@@ -449,7 +480,7 @@ export default function TrackerView({
           <div className="hero flex flex-col gap-4">
             <div>
               <h2 className="section-title">Cerrar mi día</h2>
-              <p className="help mt-1">Tus respuestas se guardan solas en este dispositivo. Al cerrar el día se registran en el historial.</p>
+              <p className="help mt-1">Tus respuestas se guardan solas mientras avanzas. Al cerrar el día se registran en el historial.</p>
             </div>
             <button type="button" className="btn btn-primary btn-lg w-full" disabled={!canClose} onClick={onClose}>
               Cerrar mi día

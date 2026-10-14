@@ -102,3 +102,28 @@ create policy "Allow anon insert on habitos"
 
 create policy "Allow anon update on habitos"
   on public.habitos for update to anon using (true) with check (true);
+
+-- ---------------------------------------------------------------------------
+-- dia_actual: the day in progress (one row, id = 'actual'). The app saves it
+-- after every answer so nothing is lost and it can be continued on another
+-- device. Same open, no-auth model as the tables above.
+-- ---------------------------------------------------------------------------
+create table if not exists public.dia_actual (
+  id text primary key,
+  estado jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.dia_actual enable row level security;
+
+drop policy if exists "Allow anon read on dia_actual" on public.dia_actual;
+create policy "Allow anon read on dia_actual"
+  on public.dia_actual for select to anon using (true);
+
+drop policy if exists "Allow anon insert on dia_actual" on public.dia_actual;
+create policy "Allow anon insert on dia_actual"
+  on public.dia_actual for insert to anon with check (true);
+
+drop policy if exists "Allow anon update on dia_actual" on public.dia_actual;
+create policy "Allow anon update on dia_actual"
+  on public.dia_actual for update to anon using (true) with check (true);

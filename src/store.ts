@@ -51,6 +51,8 @@ export interface AppState {
   // dayDate / closedDate: the tracked day ('YYYY-MM-DD', see logicalDateStr)
   // the day was started / closed for. A closed day from an earlier date is
   // cleared automatically so a new one can start.
+  // dayUpdatedAt (ms) stamps the last change to the day, to compare with the cloud copy.
+  dayUpdatedAt: number;
   dayStarted: boolean; dayStartTime: string; dayDate: string;
   closed: boolean; closedTime: string; closedDate: string; summary: SummaryState | null; summaryDismissed: boolean;
   dbHistory: HistoryRecord[]; dbLoading: boolean; dbError: string | null;
@@ -73,6 +75,7 @@ function buildInitialState(): AppState {
     habits: DEFAULT_HABITS,
     habitsSynced: false, habitsError: null, habitLayout: 0,
     entries: {},
+    dayUpdatedAt: 0,
     dayStarted: false, dayStartTime: '', dayDate: '',
     closed: false, closedTime: '', closedDate: '', summary: null, summaryDismissed: false,
     dbHistory: [], dbLoading: false, dbError: null,
